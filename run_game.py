@@ -8,6 +8,11 @@ BACKGROUND_COLOR = (204, 255, 255)  # TODO: use gradient from blue to black
 FPS = 60
 
 
+def draw_window():
+    WIN.fill(BACKGROUND_COLOR)
+    pygame.display.update()
+
+
 def main():
     clock = pygame.time.Clock()
     run = True
@@ -16,8 +21,7 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
-        WIN.fill(BACKGROUND_COLOR)
-        pygame.display.update()
+        draw_window()
     pygame.quit()
 
 
