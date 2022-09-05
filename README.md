@@ -5,6 +5,14 @@ PyUGAT's project repository for PyWeek 34.
 - PyWeek Entry: https://pyweek.org/e/RedPlanted/
 - PyUGAT PyWeek: https://pyug.at/PyWeek
 
+## Play
+
+To play, install the requirements as outlined below and run
+
+```console
+python run_game.py
+```
+
 ## Setup & Development
 
 Using your favorite tool to create an environment, do something
