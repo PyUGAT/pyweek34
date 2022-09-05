@@ -26,10 +26,17 @@ LEAVES = [
     pygame.image.load(os.path.join(imgdir, 'leaf3.png')),
 ]
 
+SCALING_FACTORS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
+
 TOMATO = [
     [(scale, pygame.transform.scale(img, tuple(Vector2(img.get_size()) * scale * 3)))
-        for scale in (0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)]
+        for scale in SCALING_FACTORS]
     for img in TOMATO]
+
+LEAVES = [
+    [(scale, pygame.transform.scale(img, tuple(Vector2(img.get_size()) * scale)))
+        for scale in SCALING_FACTORS]
+    for img in LEAVES]
 
 WIDTH, HEIGHT = 1280, 720
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -56,8 +63,7 @@ class Branch(object):
         self.plant = plant
         self.phase = phase
         self.depth = depth
-        self.leftright = leftright
-        self.angle = self.leftright * random.uniform(50, 70) * (0 if (depth == 0) else depth/2.)
+        self.angle = leftright * random.uniform(50, 70) * (0 if (depth == 0) else depth/2.)
         self.length = length
         if depth == 0:
             self.length += 40
@@ -66,10 +72,16 @@ class Branch(object):
         self.color_mod = random.uniform(0.4, 1.0)
         self.color_mod2 = random.uniform(0.4, 1.0)
         self.has_fruit = random.uniform(0, 300) < (self.plant.fertility + 10)
+        self.has_leaf = not self.has_fruit
+        self.fruit_rotten = False
         self.leaf = random.choice(LEAVES)
+        self.random_leaf_appearance_value = random.uniform(20, 70)
+        self.random_fruit_appearance_value = random.uniform(40, 70)
 
     def grow(self):
         phase = random.uniform(0.1, 0.9)
+        if self.depth == 0:
+            phase = max(phase, 1.0 - max(0.4, min(0.6, self.plant.fertility)))
         flength = random.uniform(0.2, 0.3)
         self.children.append(Branch(phase, self.length * flength, 1-2*(len(self.children)%2), self.depth + 1,
                                     plant=self.plant))
@@ -94,9 +106,19 @@ class Branch(object):
             else:
                 candidate.moregrow(recurse=False)
 
+    def update(self):
+        if self.plant.health < 50:
+            self.fruit_rotten = True
+
+        for child in self.children:
+            child.update()
+
     def draw(self, ctx, pos, factor, angle, health):
+        if factor < 0.01:
+            return
+
         angle *= factor
-        angle += self.angle
+        angle += self.angle * self.plant.growth/100
         angle *= 1.0 + 0.01 * (100-health)
 
         # normalize angle to 0..1, store sign
@@ -125,22 +147,23 @@ class Branch(object):
         cm2 = 1.0 - ((1.0 - self.color_mod2) * health/100)
         color = (cm1 * (100-health), cm2 * (244-150+health*1.5), 0)
 
-        pygame.draw.polygon(ctx.win, color, points, width=self.thickness)
+        pygame.draw.polygon(ctx.win, color, points, width=max(1, int(self.thickness*self.plant.growth/100)))
 
         for child in self.children:
             child_factor = max(0, (factor - child.phase) / (1 - child.phase))
             child.draw(ctx, pos + direction * child.phase * factor, child_factor, angle, health)
 
         if not self.children and self.has_fruit:
-            fruit_color_fresh = Color(100, 255, 0)
-            fruit_color_ripe = Color(255, 50, 0)
-            img = next(img for imgf, img in (TOMATO[int(factor*2.3)] if health > 50 else TOMATO[-1]) if imgf >= factor)
-            #win.blit(img, points[-1] + Vector2(-img.get_width()/2, 0))
-            ctx.queue.append((img, points[-1] + Vector2(-img.get_width()/2, 0)))
-            #pygame.draw.circle(win, fruit_color_fresh.lerp(fruit_color_ripe, factor), points[-1] + Vector2(0, +7), 15 * factor)
-        else:
-            if factor > 0.5:
-                ctx.win.blit(self.leaf, points[-1] + Vector2(-self.leaf.get_width()/2, 0))
+            if self.plant.growth > self.random_fruit_appearance_value:
+                fruit_color_fresh = Color(100, 255, 0)
+                fruit_color_ripe = Color(255, 50, 0)
+                img = next(img for imgf, img in (TOMATO[int(factor*2.3)] if not self.fruit_rotten else TOMATO[-1]) if imgf >= factor)
+                ctx.queue.append((img, points[-1] + Vector2(-img.get_width()/2, 0)))
+        elif self.has_leaf:
+            if self.plant.growth > self.random_leaf_appearance_value:
+                ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
+                img = next(img for imgf, img in self.leaf if imgf >= ff)
+                ctx.win.blit(img, points[-1] + Vector2(-img.get_width()/2, 0))
 
 
 class Plant(object):
@@ -162,8 +185,9 @@ class Plant(object):
         self.root.moregrow()
 
     def update(self):
-        #self.health = 50 + 50 * math.sin(time.time()*2)
-        ...
+        #self.growth += 0.01
+        #self.growth = min(100, self.growth)
+        self.root.update()
 
     def draw(self, ctx, pos):
         factor = self.growth / 100
