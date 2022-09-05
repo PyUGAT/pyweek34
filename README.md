@@ -1,7 +1,9 @@
-# [PyWeek 34](https://pyweek.org/34/)
+# [PyWeek 34](https://pyweek.org/34/): Red Planted
 
 PyUGAT's project repository for PyWeek 34.
 
+- PyWeek Entry: https://pyweek.org/e/RedPlanted/
+- PyUGAT PyWeek: https://pyug.at/PyWeek
 
 ## Setup
 
