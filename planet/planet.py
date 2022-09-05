@@ -7,7 +7,7 @@ class Planet:
         self.color = color
         self.horizon_height = horizon_height
 
-    def draw(self, win):
+    def draw(self, win, rotation):
         rect = pygame.Rect(
             -self.radius + win.get_width() / 2,
             win.get_height() - self.horizon_height,
