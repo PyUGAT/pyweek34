@@ -47,3 +47,7 @@ Feel free to format you code using [black](https://black.readthedocs.io/).
 You need shared documents? Consider [C3W's cryptpad instance](https://pads.c3w.at/).
 
 You want another shared whiteboard? Consider [cocreate](https://cocreate.csail.mit.edu/).
+
+You want sound effects? Consider [freesound](https://freesound.org/).
+
+You want images/art? Consider [OpenGameArt](https://opengameart.org/).
