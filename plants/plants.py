@@ -116,7 +116,7 @@ class Branch(object):
         angle *= 180 * f
 
         # angle added due to wind
-        wind_angle = 10*math.sin(time.time())/max(1, 5-self.depth)
+        wind_angle = 10*math.sin(self.plant.wind_phase + self.plant.wind_speed * time.time())/max(1, 5-self.depth)
 
         direction = Vector2(0, -self.length).rotate(angle + wind_angle)
 
@@ -151,6 +151,9 @@ class Plant(object):
         self.growth = 0
         self.health = 100
         self.fertility = fertility
+
+        self.wind_phase = random.uniform(0, 2*math.pi)
+        self.wind_speed = random.uniform(0.9, 1.3)
 
         self.root = Branch(phase=0, length=random.uniform(100, 500)*(0.5+0.5*self.fertility/100), leftright=+1, depth=0, plant=self)
         self.root.grow()
