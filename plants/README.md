@@ -1,4 +1,14 @@
-Experimenting with plants generation / animation / rendering.
+# Experimenting with plants generation / animation / rendering
+
+To try it out:
+
+```
+python3 plants.py
+```
+
+If you get a libGL error and use conda for package management,
+you can solve it within your environment by `conda install -c conda-forge libstdcxx-ng`.
+
 
 Sources:
 
