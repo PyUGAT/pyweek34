@@ -52,7 +52,8 @@ class RenderContext():
 
 
 class Branch(object):
-    def __init__(self, phase, length, leftright, depth):
+    def __init__(self, phase, length, leftright, depth, plant):
+        self.plant = plant
         self.phase = phase
         self.depth = depth
         self.leftright = leftright
@@ -60,30 +61,38 @@ class Branch(object):
         self.length = length
         if depth == 0:
             self.length += 40
-        self.thickness = int(10 / (1 if not depth else depth))
+        self.thickness = max(8, int((self.plant.fertility / 5) / (1 if not depth else depth)))
         self.children = []
         self.color_mod = random.uniform(0.4, 1.0)
         self.color_mod2 = random.uniform(0.4, 1.0)
-        self.has_fruit = True#random.choice([False, True])
+        self.has_fruit = random.uniform(0, 300) < (self.plant.fertility + 10)
         self.leaf = random.choice(LEAVES)
 
     def grow(self):
         phase = random.uniform(0.1, 0.9)
         flength = random.uniform(0.2, 0.3)
-        self.children.append(Branch(phase, self.length * flength, 1-2*(len(self.children)%2), self.depth + 1))
+        self.children.append(Branch(phase, self.length * flength, 1-2*(len(self.children)%2), self.depth + 1,
+                                    plant=self.plant))
 
-    def moregrow(self):
+    def moregrow(self, recurse=True):
         if not self.children:
             if random.choice([False, False, False, True]):
                 self.grow()
             return
 
-        for i in range(2):
-            candidate = random.choice(self.children)
-            if random.choice([True, False, False]):
+        candidates = list(self.children) * int(max(1, self.plant.fertility / 20))
+
+        for i in range(int(self.plant.fertility/5)):
+            if not candidates:
+                break
+
+            candidate = random.choice(candidates)
+            candidates.remove(candidate)
+
+            if random.choice([True, False] if self.plant.fertility > 30 else [False, False, True]) or not recurse:
                 candidate.grow()
             else:
-                candidate.moregrow()
+                candidate.moregrow(recurse=False)
 
     def draw(self, ctx, pos, factor, angle, health):
         angle *= factor
@@ -135,16 +144,19 @@ class Branch(object):
 
 
 class Plant(object):
-    def __init__(self, pos=None):
+    def __init__(self, pos, fertility):
         self.started = time.time()
         self.pos = pos
-        self.root = Branch(phase=0, length=random.uniform(100, 500), leftright=+1, depth=0)
+
+        self.growth = 0
+        self.health = 100
+        self.fertility = fertility
+
+        self.root = Branch(phase=0, length=random.uniform(100, 500)*(0.5+0.5*self.fertility/100), leftright=+1, depth=0, plant=self)
         self.root.grow()
         self.root.grow()
         self.root.grow()
         self.root.moregrow()
-        self.growth = 0
-        self.health = 100
 
     def update(self):
         #self.health = 50 + 50 * math.sin(time.time()*2)
@@ -249,6 +261,7 @@ class Slider(Widget):
         self.max = maximum
         self.value = value
         self._begin_drag = None
+        self._callback = None
 
     def layout(self):
         self.rect.size = (self.WIDTH, self.HEIGHT)
@@ -270,7 +283,8 @@ class Slider(Widget):
         self._begin_drag = Vector2(pos)
 
     def mouseup(self, pos):
-        ...
+        if self._callback is not None:
+            self._callback(self)
 
 
 class DebugGUI(Container):
@@ -299,15 +313,25 @@ class DebugGUI(Container):
 def main():
     run = True
 
-    plants = [Plant(Vector2(-WIDTH/7*(i-2), 0)) for i in range(5)]
-
     health_slider = Slider('health', 0, 100, 100)
     growth_slider = Slider('growth', 0, 100, 0)
+    fertility_slider = Slider('fertility', 0, 100, 5)
+
+    plants = []
+
+    def make_new_plants(fertility_slider):
+        nonlocal plants
+        plants = [Plant(Vector2(-WIDTH/7*(i-2), 0), int(fertility_slider.value)) for i in range(5)]
+
+    fertility_slider._callback = make_new_plants
+
+    make_new_plants(fertility_slider)
 
     gui = DebugGUI([
         VBox([
             health_slider,
             growth_slider,
+            fertility_slider,
         ])
     ])
 
