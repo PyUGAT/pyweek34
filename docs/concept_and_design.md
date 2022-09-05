@@ -38,7 +38,7 @@ For now, we focus on click-actions, i.e. every interaction is a click on the res
 
 Harvesting tomatoes earns you *tomato scores*! (love it!)
 
-## Objects
+## Layout, concepts, objects
 
 Our world consists of...
 
@@ -49,6 +49,10 @@ Our world consists of...
 - Ideas for later:
   - At night, plants only grow slowly and flies sleep
   - Gardening dynamics could depend on day-night
+
+**Minimap**
+- Simplified overview map showing the entire world
+  - Based on simplified depiction of objects using `draw_mini()` (or similar)
 
 **The red planet**
 - Forms the center of the coordinate system
