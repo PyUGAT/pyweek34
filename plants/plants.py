@@ -36,7 +36,7 @@ class ResourceManager(object):
         return os.path.join(self.root, filename)
 
     def sprite(self, filename: str):
-        return Sprite(self.dir('images').filename(filename))
+        return Sprite(self.dir('image').filename(filename))
 
     def font(self, filename: str, point_size: int):
         return pygame.font.Font(self.dir('font').filename(filename), point_size)
@@ -428,7 +428,7 @@ class Window(object):
 
 
 class Game(Window, IUpdateReceiver):
-    def __init__(self, data_path: str = HERE):
+    def __init__(self, data_path: str = os.path.join(HERE, 'data')):
         super().__init__('Red Planted')
 
         self.resources = ResourceManager(data_path)
