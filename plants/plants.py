@@ -484,11 +484,60 @@ class Planet(IDrawable):
         glRotatef(position.angle_degrees, 0, 0, 1)
 
 
+class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
+    def __init__(self, game, index, base_angle):
+        self.game = game
+        self.index = index
+        self.base_angle = base_angle
+        self.number_of_plants = random.choice([2, 3, 5, 6])
+        self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants]
+        self.fertility = int(random.uniform(10, 70))
+        self.plants = []
+        self.make_new_plants()
+
+    def clicked(self):
+        print(f"ouch, i'm a sector! {self.index}")
+        self.game.target_rotate = 360-(self.base_angle + self.sector_width_degrees / 2)
+        self.game.target_zoom = 100
+
+    def make_new_plants(self):
+        self.plants = []
+        for j in range(self.number_of_plants):
+            coordinate = PlanetSurfaceCoordinates(self.base_angle +
+                                                  self.sector_width_degrees * (j / (self.number_of_plants-1)))
+            self.plants.append(Plant(self, self.game.planet, coordinate, self.fertility, self.game.artwork))
+
+    def update(self):
+        for plant in self.plants:
+            plant.health = self.game.health_slider.value
+            plant.growth = self.game.growth_slider.value
+            plant.update()
+
+    def draw(self, ctx):
+        points = []
+        def add_point(p):
+            nonlocal points
+            points.append(self.game.transform_point_gl(p))
+
+        def add_fruit(branch, topleft, width, height):
+            aabb = aabb_from_points([
+                self.game.transform_point_gl(topleft),
+                self.game.transform_point_gl(topleft + Vector2(width, height)),
+            ])
+            self.game.debug_aabb.append(('fruit', Color(255, 255, 255), aabb, branch))
+
+        for plant in self.plants:
+            plant.draw(ctx, add_point, add_fruit)
+
+        if points:
+            self.game.debug_aabb.append((f'Sector {self.index}', Color(255, 255, 0), aabb_from_points(points), self))
+
 
 class Plant(IUpdateReceiver):
-    def __init__(self, planet: Planet, position: PlanetSurfaceCoordinates, fertility, artwork: Artwork):
+    def __init__(self, sector: Sector, planet: Planet, position: PlanetSurfaceCoordinates, fertility, artwork: Artwork):
         super().__init__()
 
+        self.sector = sector
         self.planet = planet
         self.position = position
         self.artwork = artwork
@@ -732,55 +781,6 @@ class Window(object):
 
     def quit(self):
         pygame.quit()
-
-
-class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
-    def __init__(self, game, index, base_angle):
-        self.game = game
-        self.index = index
-        self.base_angle = base_angle
-        self.number_of_plants = random.choice([2, 3, 5, 6])
-        self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants]
-        self.fertility = int(random.uniform(10, 70))
-        self.plants = []
-        self.make_new_plants()
-
-    def clicked(self):
-        print(f"ouch, i'm a sector! {self.index}")
-        self.game.target_rotate = 360-(self.base_angle + self.sector_width_degrees / 2)
-        self.game.target_zoom = 100
-
-    def make_new_plants(self):
-        self.plants = []
-        for j in range(self.number_of_plants):
-            coordinate = PlanetSurfaceCoordinates(self.base_angle +
-                                                  self.sector_width_degrees * (j / (self.number_of_plants-1)))
-            self.plants.append(Plant(self.game.planet, coordinate, self.fertility, self.game.artwork))
-
-    def update(self):
-        for plant in self.plants:
-            plant.health = self.game.health_slider.value
-            plant.growth = self.game.growth_slider.value
-            plant.update()
-
-    def draw(self, ctx):
-        points = []
-        def add_point(p):
-            nonlocal points
-            points.append(self.game.transform_point_gl(p))
-
-        def add_fruit(branch, topleft, width, height):
-            aabb = aabb_from_points([
-                self.game.transform_point_gl(topleft),
-                self.game.transform_point_gl(topleft + Vector2(width, height)),
-            ])
-            self.game.debug_aabb.append(('fruit', Color(255, 255, 255), aabb, branch))
-
-        for plant in self.plants:
-            plant.draw(ctx, add_point, add_fruit)
-
-        if points:
-            self.game.debug_aabb.append((f'Sector {self.index}', Color(255, 255, 0), aabb_from_points(points), self))
 
 
 class Minimap(IClickReceiver):
