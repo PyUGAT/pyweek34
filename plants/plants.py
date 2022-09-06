@@ -16,6 +16,11 @@ LEFT_MOUSE_BUTTON = 1
 MIDDLE_MOUSE_BUTTON = 2
 RIGHT_MOUSE_BUTTON = 3
 
+(CLICK_PRIORITY_FRUIT,
+ CLICK_PRIORITY_PLANT,
+ CLICK_PRIORITY_SECTOR,
+ CLICK_PRIORITY_OTHER) = range(4)
+
 
 class Sprite(object):
     def __init__(self, img, *, want_mipmap: bool):
@@ -91,6 +96,9 @@ class Artwork(object):
         self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
         self.houses = [resources.sprite(f'house{num}.png') for num in (1, 2, 3, 4)]
         self.planet = resources.sprite('mars.png')
+
+    def is_tomato_ripe(self, tomato: Sprite):
+        return tomato == self.tomato[-2]
 
     def get_tomato_sprite(self, factor: float, rotten: bool):
         if rotten:
@@ -321,7 +329,8 @@ class RenderContext(object):
 
 class IClickReceiver(object):
     def clicked(self):
-        ...
+        # Return true to prevent propagation of event
+        return False
 
 
 class IMouseReceiver(object):
@@ -370,7 +379,11 @@ class Branch(IClickReceiver):
 
     def clicked(self):
         # TODO: Add score (check fruit_rotten first!)
-        self.has_fruit = False
+        if self.has_fruit and self.plant.sector.game.zoom_slider.value >= 95:
+            self.has_fruit = False
+            return True
+
+        return False
 
     def grow(self):
         phase = random.uniform(0.1, 0.9)
@@ -401,13 +414,13 @@ class Branch(IClickReceiver):
                 candidate.moregrow(recurse=False)
 
     def update(self):
-        if self.plant.health < 50:
+        if self.plant.health < 25:
             self.fruit_rotten = True
 
         for child in self.children:
             child.update()
 
-    def draw(self, ctx, pos, factor, angle, health, point_observer, fruit_observer):
+    def draw(self, ctx, pos, factor, angle, health):
         if factor < 0.01:
             return
 
@@ -441,21 +454,35 @@ class Branch(IClickReceiver):
         cm2 = 1.0 - ((1.0 - self.color_mod2) * health/100)
         color = Color((cm1 * (100-health), cm2 * (244-150+health*1.5), 0))
 
-        point_observer(pos)
-        point_observer(to_point)
+        if self.plant.need_aabb:
+            transform = self.plant.sector.game.transform_point_gl
+            self.plant.aabb_points.extend((transform(pos), transform(to_point)))
 
-        ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100)
+        zoom_adj = (100-self.plant.sector.game.zoom_slider.value)/100
+
+        ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100 + 30 * zoom_adj)
 
         for child in self.children:
             child_factor = max(0, (factor - child.phase) / (1 - child.phase))
-            child.draw(ctx, pos + direction * child.phase * factor, child_factor, angle, health, point_observer, fruit_observer)
+            child.draw(ctx, pos + direction * child.phase * factor, child_factor, angle, health)
 
         if not self.children and self.has_fruit:
             if self.plant.growth > self.random_fruit_appearance_value:
+                ff = factor + 2 * zoom_adj
                 tomato = self.plant.artwork.get_tomato_sprite(factor, self.fruit_rotten)
-                topleft = to_point + Vector2(-(tomato.width*factor)/2, 0)
-                ctx.sprite(tomato, topleft, scale=factor, z_order=ctx.Z_FRONT)
-                fruit_observer(self, topleft, factor * tomato.width, factor * tomato.height)
+                topleft = to_point + Vector2(-(tomato.width*ff)/2, 0)
+                ctx.sprite(tomato, topleft, scale=ff, z_order=ctx.Z_FRONT)
+
+                # You can only click on ripe tomatoes
+                if self.plant.artwork.is_tomato_ripe(tomato):
+                    game = self.plant.sector.game
+                    aabb = aabb_from_points([
+                        game.transform_point_gl(topleft),
+                        game.transform_point_gl(topleft + Vector2(ff * tomato.width, ff * tomato.height)),
+                    ])
+
+                    # insert front, so that the layer ordering/event handling works correctly
+                    game.debug_aabb.insert(0, ('fruit', Color(255, 255, 255), aabb, self, CLICK_PRIORITY_FRUIT))
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
                 ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
@@ -496,13 +523,21 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.number_of_plants = random.choice([2, 3, 5, 6])
         self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants]
         self.fertility = int(random.uniform(10, 70))
+        self.growth_speed = random.uniform(0.02, 0.06)
+        self.rotting_speed = random.uniform(0.01, 0.02)
         self.plants = []
         self.make_new_plants()
+        self.aabb = None
 
     def clicked(self):
         print(f"ouch, i'm a sector! {self.index}")
-        self.game.target_rotate = 360-(self.base_angle + self.sector_width_degrees / 2)
-        self.game.target_zoom = 100
+        if self.game.zoom_slider.value < 50:
+            print('zooming into sector')
+            self.game.target_rotate = 360-(self.base_angle + self.sector_width_degrees / 2)
+            self.game.target_zoom = 100
+            return True
+
+        return False
 
     def make_new_plants(self):
         self.plants = []
@@ -511,33 +546,40 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
                                                   self.sector_width_degrees * (j / (self.number_of_plants-1)))
             self.plants.append(Plant(self, self.game.planet, coordinate, self.fertility, self.game.artwork))
 
+    def replant(self, plant):
+        index = self.plants.index(plant)
+        self.plants[index] = Plant(self, self.game.planet, plant.position, self.fertility, self.game.artwork)
+
+    def invalidate_aabb(self):
+        self.aabb = None
+        for plant in self.plants:
+            plant.need_aabb = True
+
     def update(self):
         for plant in self.plants:
-            plant.health = self.game.health_slider.value
-            plant.growth = self.game.growth_slider.value
+            #plant.health = self.game.health_slider.value
+            #plant.growth = self.game.growth_slider.value
             plant.update()
 
     def draw(self, ctx):
-        points = []
-        def add_point(p):
-            nonlocal points
-            points.append(self.game.transform_point_gl(p))
-
-        def add_fruit(branch, topleft, width, height):
-            aabb = aabb_from_points([
-                self.game.transform_point_gl(topleft),
-                self.game.transform_point_gl(topleft + Vector2(width, height)),
-            ])
-            self.game.debug_aabb.append(('fruit', Color(255, 255, 255), aabb, branch))
+        self.aabb = None
 
         for plant in self.plants:
-            plant.draw(ctx, add_point, add_fruit)
+            plant.draw(ctx)
+            if plant.aabb is not None:
+                self.game.debug_aabb.append(('plant', Color(0, 128, 128), plant.aabb, plant, CLICK_PRIORITY_PLANT))
+                if self.aabb is None:
+                    self.aabb = Rect(plant.aabb)
+                else:
+                    self.aabb = self.aabb.union(plant.aabb)
 
-        if points:
-            self.game.debug_aabb.append((f'Sector {self.index}', Color(255, 255, 0), aabb_from_points(points), self))
+        if self.aabb is not None:
+            self.game.debug_aabb.append((f'sector {self.index}', Color(128, 255, 128), self.aabb, self, CLICK_PRIORITY_SECTOR))
 
 
-class Plant(IUpdateReceiver):
+class Plant(IUpdateReceiver, IClickReceiver):
+    AABB_PADDING_PX = 20
+
     def __init__(self, sector: Sector, planet: Planet, position: PlanetSurfaceCoordinates, fertility, artwork: Artwork):
         super().__init__()
 
@@ -545,6 +587,10 @@ class Plant(IUpdateReceiver):
         self.planet = planet
         self.position = position
         self.artwork = artwork
+
+        self.need_aabb = True
+        self.aabb_points = []
+        self.aabb = None
 
         self.growth = 0
         self.health = 100
@@ -561,12 +607,28 @@ class Plant(IUpdateReceiver):
         self.root.grow()
         self.root.moregrow()
 
+    def clicked(self):
+        # TODO: Replant? / FIXME: only when zoomed in
+        if self.sector.game.zoom_slider.value == 100:
+            self.sector.replant(self)
+            return True
+        else:
+            print('ingoring plant click - not fully zoomed in!')
+
+        return False
+
     def update(self):
-        #self.growth += 0.01
-        #self.growth = min(100, self.growth)
+        if self.growth < 100:
+            self.growth += self.sector.growth_speed
+            self.growth = min(100, self.growth)
+            self.need_aabb = True
+        else:
+            self.health -= self.sector.rotting_speed
+            self.health = max(0, self.health)
+            self.need_aabb = True
         self.root.update()
 
-    def draw(self, ctx, point_observer, fruit_observer):
+    def draw(self, ctx):
         factor = self.growth / 100
 
         glMatrixMode(GL_MODELVIEW)
@@ -574,7 +636,13 @@ class Plant(IUpdateReceiver):
 
         self.planet.apply_gl_transform(self.position)
 
-        self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health, point_observer, fruit_observer)
+        self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health)
+
+        if self.need_aabb and self.aabb_points:
+            self.aabb = aabb_from_points(self.aabb_points)
+            self.aabb = self.aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
+            self.aabb_points = []
+            self.need_aabb = False
 
         glPopMatrix()
 
@@ -804,6 +872,7 @@ class Minimap(IClickReceiver):
 
     def clicked(self):
         self.game.target_zoom = 0 if self.game.zoom_slider.value > 50 else 100
+        return True
 
 
 class Game(Window, IUpdateReceiver, IMouseReceiver):
@@ -850,23 +919,32 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.debug_aabb = []
         self.draw_debug_aabb = True
+        self.cull_via_aabb = True
 
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
 
         dy = self.gui.wheel_sum.y
+        if dy != 0:
+            self.invalidate_aabb()
         self.rotate_slider.value += (dy * (30000 / self.planet.get_circumfence()))
         self.rotate_slider.value %= self.rotate_slider.max
         self.gui.wheel_sum.y = 0
 
         self.set_subtitle(f'{self.renderer.fps:.0f} FPS')
 
+    def invalidate_aabb(self):
+        for sector in self.sectors:
+            sector.invalidate_aabb()
+
     def mousedown(self, position: Vector2):
-        for label, color, rect, obj in self.debug_aabb:
+        for label, color, rect, obj, priority in sorted(self.debug_aabb, key=lambda t: t[-1]):
             if rect.collidepoint(position):
                 print('Clicked on:', label)
                 if isinstance(obj, IClickReceiver):
-                    obj.clicked()
+                    if obj.clicked():
+                        print('click was handled -> breaking out')
+                        break
 
     def mousemove(self, position: Vector2):
         ...
@@ -882,18 +960,20 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             sector.make_new_plants()
 
     def update(self):
-        alpha = 0.08
-
         if self.target_rotate is not None:
+            alpha = 0.2
             if abs(self.target_rotate - self.rotate_slider.value) < 2:
                 self.rotate_slider.value = self.target_rotate
                 self.target_rotate = None
+                self.invalidate_aabb()
             else:
                 self.rotate_slider.value = alpha * self.target_rotate + (1 - alpha) * self.rotate_slider.value
         elif self.target_zoom is not None:
+            alpha = 0.1
             if abs(self.target_zoom - self.zoom_slider.value) < 0.01:
                 self.zoom_slider.value = self.target_zoom
                 self.target_zoom = None
+                self.invalidate_aabb()
             else:
                 self.zoom_slider.value = alpha * self.target_zoom + (1 - alpha) * self.zoom_slider.value
 
@@ -901,12 +981,13 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         for sector in self.sectors:
             sector.update()
 
-    def draw_scene(self, ctx, *, bg_color: Color, details: bool):
+    def draw_scene(self, ctx, *, bg_color: Color, details: bool, visible_rect: Rect):
         ctx.clear(bg_color)
 
         if details:
             for sector in self.sectors:
-                sector.draw(ctx)
+                if not self.cull_via_aabb or not sector.aabb or visible_rect.colliderect(sector.aabb):
+                    sector.draw(ctx)
 
         for house in self.houses:
             house.draw(ctx)
@@ -917,11 +998,13 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
     def render_scene(self):
         with self.renderer as ctx:
+            visible_rect = Rect(0, 0, self.width, self.height)
+
             self.debug_aabb = []
 
             # Draw screen content
             ctx.camera_mode_world(self.planet, self.zoom_slider.value / 100, self.rotate_slider.value / 360)
-            self.draw_scene(ctx, bg_color=Color(30, 30, 30), details=True)
+            self.draw_scene(ctx, bg_color=Color(30, 30, 30), details=True, visible_rect=visible_rect)
 
             # GL coordinate system origin = bottom left
             minimap_gl_rect = (int(self.minimap.rect.x),
@@ -933,11 +1016,11 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             glScissor(*minimap_gl_rect)
             glEnable(GL_SCISSOR_TEST)
 
-            self.debug_aabb.append(('minimap', Color(0, 255, 255), self.minimap.rect, self.minimap))
+            self.debug_aabb.append(('minimap', Color(0, 255, 255), self.minimap.rect, self.minimap, CLICK_PRIORITY_OTHER))
 
             ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 360)
             # TODO: Draw stylized scene
-            self.draw_scene(ctx, bg_color=Color(10, 10, 10), details=False)
+            self.draw_scene(ctx, bg_color=Color(10, 10, 10), details=False, visible_rect=visible_rect)
 
             glDisable(GL_SCISSOR_TEST)
             glViewport(0, 0, self.width, self.height)
@@ -948,9 +1031,11 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             self.gui.draw(ctx)
 
             if self.draw_debug_aabb:
-                for label, color, rect, obj in self.debug_aabb:
-                    ctx.aabb(color, rect)
-                    ctx.text(label, color, Vector2(rect.topleft))
+                for label, color, rect, obj, priority in self.debug_aabb:
+                    # only draw if it's visible
+                    if not self.cull_via_aabb or visible_rect.colliderect(rect):
+                        ctx.aabb(color, rect)
+                        ctx.text(label, color, Vector2(rect.topleft))
 
 
 def main():
