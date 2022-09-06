@@ -137,6 +137,8 @@ class RenderContext(object):
         self.queue = []
         self.started = time.time()
         self.now = 0
+        self.clock = pygame.time.Clock()
+        self.fps = 0
 
     def __enter__(self):
         self.now = time.time() - self.started
@@ -149,6 +151,8 @@ class RenderContext(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pygame.display.flip()
+        self.clock.tick()
+        self.fps = self.clock.get_fps()
         return False
 
     def camera_mode_overlay(self):
@@ -733,6 +737,7 @@ class Window(object):
     EVENT_TYPE_UPDATE = pygame.USEREVENT + 42
 
     def __init__(self, title: str, width: int = 1280, height: int = 720, updates_per_second: int = 60):
+        self.title = title
         self.width = width
         self.height = height
         pygame.display.init()
@@ -746,6 +751,9 @@ class Window(object):
         pygame.font.init()
         pygame.time.set_timer(self.EVENT_TYPE_UPDATE, int(1000 / updates_per_second))
         self.running = True
+
+    def set_subtitle(self, subtitle):
+        pygame.display.set_caption(f'{self.title}: {subtitle}')
 
     def transform_point_gl(self, p):
         v = (p.x, p.y, 0, 1)
@@ -845,10 +853,13 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
+
         dy = self.gui.wheel_sum.y
         self.rotate_slider.value += (dy * (30000 / self.planet.get_circumfence()))
         self.rotate_slider.value %= self.rotate_slider.max
         self.gui.wheel_sum.y = 0
+
+        self.set_subtitle(f'{self.renderer.fps:.0f} FPS')
 
     def mousedown(self, position: Vector2):
         for label, color, rect, obj in self.debug_aabb:
