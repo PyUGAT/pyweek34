@@ -108,6 +108,23 @@ class Artwork(object):
         return self.planet
 
 
+def aabb_from_points(points: [Vector2]):
+    x = min(point.x for point in points)
+    y = min(point.y for point in points)
+    w = max(point.x for point in points) - x
+    h = max(point.y for point in points) - y
+    return Rect(x, y, w, h)
+
+
+def multiply_vec4_mat4(v, m):
+    return (
+        m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0] * v[3],
+        m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1] * v[3],
+        m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2] * v[3],
+        m[0][3] * v[0] + m[1][3] * v[1] + m[2][3] * v[2] + m[3][3] * v[3],
+    )
+
+
 class RenderContext(object):
     Z_BACK = 1
     Z_FRONT = 99
@@ -184,6 +201,16 @@ class RenderContext(object):
         glVertex2f(*rectangle.topleft)
         glVertex2f(*rectangle.bottomright)
         glVertex2f(*rectangle.bottomleft)
+        glEnd()
+
+    def aabb(self, color: Color, rectangle: Rect):
+        glBegin(GL_LINE_STRIP)
+        glColor4f(*color.normalize())
+        glVertex2f(*rectangle.topleft)
+        glVertex2f(*rectangle.topright)
+        glVertex2f(*rectangle.bottomright)
+        glVertex2f(*rectangle.bottomleft)
+        glVertex2f(*rectangle.topleft)
         glEnd()
 
     def circle(self, color: Color, center: Vector2, radius: float):
@@ -367,7 +394,7 @@ class Branch(object):
         for child in self.children:
             child.update()
 
-    def draw(self, ctx, pos, factor, angle, health):
+    def draw(self, ctx, pos, factor, angle, health, point_observer, fruit_observer):
         if factor < 0.01:
             return
 
@@ -401,16 +428,21 @@ class Branch(object):
         cm2 = 1.0 - ((1.0 - self.color_mod2) * health/100)
         color = Color((cm1 * (100-health), cm2 * (244-150+health*1.5), 0))
 
+        point_observer(pos)
+        point_observer(to_point)
+
         ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100)
 
         for child in self.children:
             child_factor = max(0, (factor - child.phase) / (1 - child.phase))
-            child.draw(ctx, pos + direction * child.phase * factor, child_factor, angle, health)
+            child.draw(ctx, pos + direction * child.phase * factor, child_factor, angle, health, point_observer, fruit_observer)
 
         if not self.children and self.has_fruit:
             if self.plant.growth > self.random_fruit_appearance_value:
                 tomato = self.plant.artwork.get_tomato_sprite(factor, self.fruit_rotten)
-                ctx.sprite(tomato, to_point + Vector2(-(tomato.width*factor)/2, 0), scale=factor, z_order=ctx.Z_FRONT)
+                topleft = to_point + Vector2(-(tomato.width*factor)/2, 0)
+                ctx.sprite(tomato, topleft, scale=factor, z_order=ctx.Z_FRONT)
+                fruit_observer(self, topleft, factor * tomato.width, factor * tomato.height)
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
                 ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
@@ -472,7 +504,7 @@ class Plant(IUpdateReceiver):
         #self.growth = min(100, self.growth)
         self.root.update()
 
-    def draw(self, ctx):
+    def draw(self, ctx, point_observer, fruit_observer):
         factor = self.growth / 100
 
         glMatrixMode(GL_MODELVIEW)
@@ -480,7 +512,7 @@ class Plant(IUpdateReceiver):
 
         self.planet.apply_gl_transform(self.position)
 
-        self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health)
+        self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health, point_observer, fruit_observer)
 
         glPopMatrix()
 
@@ -559,7 +591,7 @@ class VBox(Box):
 
     def layout(self):
         pos = Vector2(self.rect.topleft) + Vector2(self.border, self.border)
-        right = self.rect.right
+        right = self.rect.left + self.border
         for child in self.children:
             child.layout()
             child.rect.topleft = pos
@@ -612,8 +644,9 @@ class Slider(Widget):
 
 
 class DebugGUI(Container):
-    def __init__(self, widgets=None):
+    def __init__(self, default_handler: IMouseReceiver, widgets=None):
         super().__init__()
+        self.default_handler = default_handler
         if widgets is not None:
             for widget in widgets:
                 self.add(widget)
@@ -621,9 +654,8 @@ class DebugGUI(Container):
         self.wheel_sum = Vector2(0, 0)
 
     def mousedown(self, pos):
-        self.focused = self.pick(pos)
-        if self.focused:
-            self.focused.mousedown(pos)
+        self.focused = self.pick(pos) or self.default_handler
+        self.focused.mousedown(pos)
 
     def mousemove(self, pos):
         if self.focused:
@@ -657,6 +689,22 @@ class Window(object):
         pygame.time.set_timer(self.EVENT_TYPE_UPDATE, int(1000 / updates_per_second))
         self.running = True
 
+    def transform_point_gl(self, p):
+        v = (p.x, p.y, 0, 1)
+
+        modelview = glGetFloatv(GL_MODELVIEW_MATRIX)
+        v = multiply_vec4_mat4(v, modelview)
+
+        projection = glGetFloatv(GL_PROJECTION_MATRIX)
+        v = multiply_vec4_mat4(v, projection)
+
+        result = Vector2(v[0] / v[3], v[1] / v[3])
+
+        result.x = self.width * (result.x + 1) / 2
+        result.y = self.height * (1 - ((result.y + 1) / 2))
+
+        return result
+
     def process_events(self, *, mouse: IMouseReceiver, update: IUpdateReceiver):
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -677,7 +725,7 @@ class Window(object):
         pygame.quit()
 
 
-class Game(Window, IUpdateReceiver):
+class Game(Window, IUpdateReceiver, IMouseReceiver):
     def __init__(self, data_path: str = os.path.join(HERE, 'data')):
         super().__init__('Red Planted')
 
@@ -696,7 +744,7 @@ class Game(Window, IUpdateReceiver):
         self.zoom_slider = Slider('zoom', 0, 100, 100)
         self.rotate_slider = Slider('rotate', 0, 100, 0)
 
-        self.gui = DebugGUI([
+        self.gui = DebugGUI(self, [
             VBox([
                 self.health_slider,
                 self.growth_slider,
@@ -716,9 +764,33 @@ class Game(Window, IUpdateReceiver):
 
         self.make_new_plants()
 
+        self.target_zoom = None
+
+        self.debug_aabb = []
+        self.draw_debug_aabb = True
+
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
         self.rotate_slider.value = (self.gui.wheel_sum.y * (10000 / self.planet.get_circumfence())) % 100
+
+    def mousedown(self, position: Vector2):
+        for label, color, rect, obj in self.debug_aabb:
+            if rect.collidepoint(position):
+                print('Clicked on:', label)
+                if isinstance(obj, Branch):
+                    obj.has_fruit = False
+                    # TODO: Make sure we abort processing here, to not pick two fruit at the same time
+                elif label == 'minimap':
+                    self.target_zoom = 0 if self.zoom_slider.value > 50 else 100
+
+    def mousemove(self, position: Vector2):
+        ...
+
+    def mouseup(self, position: Vector2):
+        ...
+
+    def mousewheel(self, x: float, y: float, flipped: bool):
+        ...
 
     def make_new_plants(self):
         self.sectors = []
@@ -741,6 +813,17 @@ class Game(Window, IUpdateReceiver):
                                      self.artwork))
 
     def update(self):
+        if self.target_zoom is not None:
+            step = 3
+            if self.target_zoom < self.zoom_slider.value:
+                self.zoom_slider.value = min(100, max(0, int(self.zoom_slider.value - step)))
+                if self.target_zoom == self.zoom_slider.value:
+                    self.target_zoom = None
+            elif self.target_zoom > self.zoom_slider.value:
+                self.zoom_slider.value = min(100, max(0, int(self.zoom_slider.value + step)))
+                if self.target_zoom == self.zoom_slider.value:
+                    self.target_zoom = None
+
         for sector in self.sectors:
             for plant in sector:
                 plant.health = self.health_slider.value
@@ -751,9 +834,24 @@ class Game(Window, IUpdateReceiver):
         ctx.clear(bg_color)
 
         if details:
-            for sector in self.sectors:
+            for idx, sector in enumerate(self.sectors):
+                points = []
+                def add_point(p):
+                    nonlocal points
+                    points.append(self.transform_point_gl(p))
+
+                def add_fruit(branch, topleft, width, height):
+                    aabb = aabb_from_points([
+                        self.transform_point_gl(topleft),
+                        self.transform_point_gl(topleft + Vector2(width, height)),
+                    ])
+                    self.debug_aabb.append(('fruit', Color(255, 255, 255), aabb, branch))
+
                 for plant in sector:
-                    plant.draw(ctx)
+                    plant.draw(ctx, add_point, add_fruit)
+
+                if points:
+                    self.debug_aabb.append((f'Sector {idx}', Color(255, 255, 0), aabb_from_points(points), sector))
 
         for house in self.houses:
             house.draw(ctx)
@@ -764,6 +862,8 @@ class Game(Window, IUpdateReceiver):
 
     def render_scene(self):
         with self.renderer as ctx:
+            self.debug_aabb = []
+
             # Draw screen content
             ctx.camera_mode_world(self.planet, self.zoom_slider.value / 100, self.rotate_slider.value / 100)
             self.draw_scene(ctx, bg_color=Color(30, 30, 30), details=True)
@@ -778,6 +878,8 @@ class Game(Window, IUpdateReceiver):
             glScissor(*minimap_gl_rect)
             glEnable(GL_SCISSOR_TEST)
 
+            self.debug_aabb.append(('minimap', Color(0, 255, 255), self.minimap_rect, self))
+
             ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 100)
             # TODO: Draw stylized scene
             self.draw_scene(ctx, bg_color=Color(10, 10, 10), details=False)
@@ -789,6 +891,11 @@ class Game(Window, IUpdateReceiver):
             # Draw GUI overlay
             ctx.camera_mode_overlay()
             self.gui.draw(ctx)
+
+            if self.draw_debug_aabb:
+                for label, color, rect, obj in self.debug_aabb:
+                    ctx.aabb(color, rect)
+                    ctx.text(label, color, Vector2(rect.topleft))
 
 
 def main():
