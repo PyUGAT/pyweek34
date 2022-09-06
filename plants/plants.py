@@ -8,21 +8,50 @@ from pygame.locals import *
 
 from pygame.math import Vector2
 
+from OpenGL.GL import *
+
 HERE = os.path.dirname(__file__) or '.'
 
 
+class Texture(object):
+    def __init__(self, sprite):
+        self.id = glGenTextures(1)
+
+        glBindTexture(GL_TEXTURE_2D, self.id)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sprite.width, sprite.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+
+        view = sprite.img.get_buffer()
+        for y in range(sprite.height):
+            start = y * sprite.img.get_pitch()
+            pixeldata = view.raw[start:start+sprite.width*sprite.img.get_bytesize()]
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, sprite.width, 1, GL_BGRA, GL_UNSIGNED_BYTE, pixeldata)
+
+        # TODO: Mipmaps, if requested
+
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+    def __del__(self):
+        glDeleteTextures([self.id])
+
+
 class Sprite(object):
-    def __init__(self, filename: str):
-        self.filename = filename
-        self.img = pygame.image.load(filename)
+    def __init__(self, img):
+        self.img = img
         self.width, self.height = self.img.get_size()
+        self._texture = None
 
-        SCALING_FACTORS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
-        self._scaled = [(scale, pygame.transform.scale(self.img, tuple(Vector2(self.img.get_size()) * scale)))
-                       for scale in SCALING_FACTORS]
+    @classmethod
+    def load(cls, filename: str):
+        return cls(pygame.image.load(filename).convert_alpha())
 
-    def _get_scaled(self, factor):
-        return next(img for img_factor, img in self._scaled if img_factor >= factor)
+    def _get_texture(self):
+        if self._texture is None:
+            self._texture = Texture(self)
+
+        return self._texture
 
 
 class ResourceManager(object):
@@ -36,7 +65,7 @@ class ResourceManager(object):
         return os.path.join(self.root, filename)
 
     def sprite(self, filename: str):
-        return Sprite(self.dir('image').filename(filename))
+        return Sprite.load(self.dir('image').filename(filename))
 
     def font(self, filename: str, point_size: int):
         return pygame.font.Font(self.dir('font').filename(filename), point_size)
@@ -66,7 +95,9 @@ class RenderContext(object):
     Z_BACK = 1
     Z_FRONT = 99
 
-    def __init__(self, win, resources: ResourceManager):
+    def __init__(self, width, height, win, resources: ResourceManager):
+        self.width = width
+        self.height = height
         self.win = win
         self.font = resources.font('RobotoMono-SemiBold.ttf', 16)
         self.queue = []
@@ -75,36 +106,108 @@ class RenderContext(object):
 
     def __enter__(self):
         self.now = time.time() - self.started
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        glOrtho(0, self.width, self.height, 0, 0, 1)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pygame.display.update()
+        pygame.display.flip()
         return False
 
+    def camera_mode_overlay(self):
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+
+    def camera_mode_world(self):
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        #glScalef(0.2, 0.2, 0.2)
+
     def clear(self, color: Color):
-        self.win.fill(color)
+        glClearColor(*color.normalize())
+        glClear(GL_COLOR_BUFFER_BIT)
 
     def sprite(self, sprite: Sprite, position: Vector2, scale: float = 1, z_order: int = 0):
-        self.queue.append((z_order, sprite._get_scaled(scale), position))
+        matrix = glGetFloatv(GL_MODELVIEW_MATRIX)
+        self.queue.append((z_order, sprite, position, scale, matrix))
 
     def text(self, text: str, color: Color, position: Vector2):
-        self.win.blit(self.font.render(text, True, color), position)
+        self._blit(Sprite(self.font.render(text, True, color)), position)
 
     def rect(self, color: Color, rectangle: Rect):
-        pygame.draw.rect(self.win, color, rectangle)
+        glBegin(GL_TRIANGLES)
+        glColor4f(*color.normalize())
+        glVertex2f(*rectangle.topleft)
+        glVertex2f(*rectangle.topright)
+        glVertex2f(*rectangle.bottomright)
+        glVertex2f(*rectangle.topleft)
+        glVertex2f(*rectangle.bottomright)
+        glVertex2f(*rectangle.bottomleft)
+        glEnd()
 
     def circle(self, color: Color, center: Vector2, radius: float):
-        pygame.draw.circle(self.win, color, center, radius)
+        glBegin(GL_TRIANGLE_FAN)
+        glColor4f(*color.normalize())
+        glVertex2f(*center)
+
+        # Small circles can affort 20 steps, for bigger circles,
+        # add enough steps that the largest line segment is 30 world units
+        steps = max(20, (radius * 2 * math.pi) / 30)
+
+        for angle in range(0, 361, int(360 / steps)):
+            glVertex2f(*(center + Vector2(radius, 0).rotate(angle)))
+        glEnd()
 
     def line(self, color: Color, from_point: Vector2, to_point: Vector2, width: float):
-        pygame.draw.polygon(self.win, color, [from_point, to_point], max(1, int(width)))
+        glLineWidth(max(1, width))
+        glBegin(GL_LINES)
+        glColor4f(*color.normalize())
+        glVertex2f(*from_point)
+        glVertex2f(*to_point)
+        glEnd()
 
-    def polygon(self, color: Color, points: [Vector2]):
-        pygame.draw.polygon(self.win, color, points)
+    def _blit(self, sprite: Sprite, position, scale: float = 1):
+        width, height = sprite.width, sprite.height
+
+        rectangle = Rect(position.x, position.y, width * scale, height * scale)
+
+        texture = sprite._get_texture()
+
+        glBindTexture(GL_TEXTURE_2D, texture.id)
+
+        glEnable(GL_TEXTURE_2D)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glBegin(GL_TRIANGLES)
+        glColor4f(1, 1, 1, 1)
+        glTexCoord2f(0, 0)
+        glVertex2f(*rectangle.topleft)
+        glTexCoord2f(1, 0)
+        glVertex2f(*rectangle.topright)
+        glTexCoord2f(1, 1)
+        glVertex2f(*rectangle.bottomright)
+        glTexCoord2f(0, 0)
+        glVertex2f(*rectangle.topleft)
+        glTexCoord2f(1, 1)
+        glVertex2f(*rectangle.bottomright)
+        glTexCoord2f(0, 1)
+        glVertex2f(*rectangle.bottomleft)
+        glEnd()
+        glDisable(GL_BLEND)
+        glDisable(GL_TEXTURE_2D)
+
+        glBindTexture(GL_TEXTURE_2D, 0)
 
     def flush(self):
-        for z_order, img, position in sorted(self.queue, key=lambda item: item[0]):
-            self.win.blit(img, position)
+        for z_order, sprite, position, scale, matrix in sorted(self.queue, key=lambda item: item[0]):
+            glMatrixMode(GL_MODELVIEW)
+            glPushMatrix()
+            glLoadMatrixf(matrix)
+            self._blit(sprite, position, scale)
+            glPopMatrix()
         self.queue = []
 
 
@@ -216,7 +319,7 @@ class Branch(object):
         to_point = pos + direction * factor
         cm1 = 1.0 - ((1.0 - self.color_mod) * health/100)
         cm2 = 1.0 - ((1.0 - self.color_mod2) * health/100)
-        color = (cm1 * (100-health), cm2 * (244-150+health*1.5), 0)
+        color = Color((cm1 * (100-health), cm2 * (244-150+health*1.5), 0))
 
         ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100)
 
@@ -264,7 +367,13 @@ class Plant(IUpdateReceiver):
     def draw(self, ctx):
         factor = self.growth / 100
 
-        self.root.draw(ctx, self.pos, factor, 0., self.health)
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glTranslatef(self.pos.x, self.pos.y, 0)
+
+        self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health)
+
+        glPopMatrix()
 
 
 class Widget(IMouseReceiver, IDrawable):
@@ -359,7 +468,7 @@ class Slider(Widget):
         radius = self.rect.height / 2
         center = self.rect.topleft + Vector2(radius + (self.rect.width - 2 * radius) * fraction, self.rect.height / 2)
         ctx.circle(Color(200, 200, 255), center, radius)
-        ctx.text(f'{self.label}: {self.value:.0f}', Color(255, 255, 255), self.rect.topleft)
+        ctx.text(f'{self.label}: {self.value:.0f}', Color(255, 255, 255), Vector2(self.rect.topleft))
 
     def mousedown(self, pos):
         self._begin_drag = Vector2(pos)
@@ -403,7 +512,13 @@ class Window(object):
     def __init__(self, title: str, width: int = 1280, height: int = 720, updates_per_second: int = 60):
         self.width = width
         self.height = height
-        self.screen = pygame.display.set_mode((width, height))
+        pygame.display.init()
+
+        # If your GPU doesn't support this, uncomment the next two lines (TODO: Auto-detect / command-line args?)
+        pygame.display.gl_set_attribute(GL_MULTISAMPLEBUFFERS, 1)
+        pygame.display.gl_set_attribute(GL_MULTISAMPLESAMPLES, 4)
+
+        self.screen = pygame.display.set_mode((width, height), DOUBLEBUF|OPENGL)
         pygame.display.set_caption(title)
         pygame.font.init()
         pygame.time.set_timer(self.EVENT_TYPE_UPDATE, int(1000 / updates_per_second))
@@ -433,7 +548,7 @@ class Game(Window, IUpdateReceiver):
 
         self.resources = ResourceManager(data_path)
         self.artwork = Artwork(self.resources)
-        self.renderer = RenderContext(self.screen, self.resources)
+        self.renderer = RenderContext(self.width, self.height, self.screen, self.resources)
 
         self.plants = []
 
@@ -451,18 +566,6 @@ class Game(Window, IUpdateReceiver):
 
         self.make_new_plants()
 
-        self.ground_points = []
-
-        for x in range(-10, self.width+10, 30):
-            self.ground_points.append((x, self.height-30+20*math.sin(x**77)))
-
-        self.ground_points.extend([
-            (self.width + 10, self.height - 30),
-            (self.width + 10, self.height + 10),
-            (- 10, self.height + 10),
-            (- 10, self.height - 30),
-        ])
-
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
 
@@ -479,15 +582,19 @@ class Game(Window, IUpdateReceiver):
 
     def render_scene(self):
         with self.renderer as ctx:
-            ctx.clear((30, 30, 30))
+            ctx.clear(Color(30, 30, 30))
+
+            ctx.camera_mode_world()
 
             for plant in self.plants:
                 plant.draw(ctx)
 
             ctx.flush()
 
-            ctx.polygon(Color(60, 50, 0), self.ground_points)
+            # Planet
+            ctx.circle(Color(200, 40, 0), Vector2(self.width / 2, self.height + 900), 1000)
 
+            ctx.camera_mode_overlay()
             self.gui.draw(ctx)
 
 
