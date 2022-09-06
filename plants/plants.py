@@ -17,13 +17,29 @@ MIDDLE_MOUSE_BUTTON = 2
 RIGHT_MOUSE_BUTTON = 3
 
 
+class Sprite(object):
+    def __init__(self, img, *, want_mipmap: bool):
+        self.img = img
+        self.width, self.height = self.img.get_size()
+        self.want_mipmap = want_mipmap
+        self._texture = None
+
+    @classmethod
+    def load(cls, filename: str):
+        return cls(pygame.image.load(filename).convert_alpha(), want_mipmap=True)
+
+    def _get_texture(self):
+        if self._texture is None:
+            self._texture = Texture(self, generate_mipmaps=self.want_mipmap)
+
+        return self._texture
+
+
 class Texture(object):
-    def __init__(self, sprite):
+    def __init__(self, sprite: Sprite, *, generate_mipmaps: bool):
         self.id = glGenTextures(1)
 
         glBindTexture(GL_TEXTURE_2D, self.id)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sprite.width, sprite.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
 
@@ -33,29 +49,18 @@ class Texture(object):
             pixeldata = view.raw[start:start+sprite.width*sprite.img.get_bytesize()]
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, sprite.width, 1, GL_BGRA, GL_UNSIGNED_BYTE, pixeldata)
 
-        # TODO: Mipmaps, if requested
+        if generate_mipmaps:
+            glGenerateMipmap(GL_TEXTURE_2D)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+        else:
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
         glBindTexture(GL_TEXTURE_2D, 0)
 
     def __del__(self):
         glDeleteTextures([self.id])
-
-
-class Sprite(object):
-    def __init__(self, img):
-        self.img = img
-        self.width, self.height = self.img.get_size()
-        self._texture = None
-
-    @classmethod
-    def load(cls, filename: str):
-        return cls(pygame.image.load(filename).convert_alpha())
-
-    def _get_texture(self):
-        if self._texture is None:
-            self._texture = Texture(self)
-
-        return self._texture
 
 
 class ResourceManager(object):
@@ -85,6 +90,7 @@ class Artwork(object):
         )]
         self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
         self.houses = [resources.sprite(f'house{num}.png') for num in (1, 2, 3, 4)]
+        self.planet = resources.sprite('mars.png')
 
     def get_tomato_sprite(self, factor: float, rotten: bool):
         if rotten:
@@ -97,6 +103,9 @@ class Artwork(object):
 
     def get_random_house(self):
         return random.choice(self.houses)
+
+    def get_mars(self):
+        return self.planet
 
 
 class RenderContext(object):
@@ -164,7 +173,7 @@ class RenderContext(object):
         self.queue.append((z_order, sprite, position, scale, matrix))
 
     def text(self, text: str, color: Color, position: Vector2):
-        self._blit(Sprite(self.font.render(text, True, color)), position)
+        self._blit(Sprite(self.font.render(text, True, color), want_mipmap=False), position)
 
     def rect(self, color: Color, rectangle: Rect):
         glBegin(GL_TRIANGLES)
@@ -189,6 +198,34 @@ class RenderContext(object):
         for angle in range(0, 361, int(360 / steps)):
             glVertex2f(*(center + Vector2(radius, 0).rotate(angle)))
         glEnd()
+
+    def textured_circle(self, sprite: Sprite, center: Vector2, radius: float):
+        texture = sprite._get_texture()
+
+        glBindTexture(GL_TEXTURE_2D, texture.id)
+
+        glEnable(GL_TEXTURE_2D)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        glBegin(GL_TRIANGLE_FAN)
+        glColor4f(1, 1, 1, 1)
+        glTexCoord2f(.5, .5)
+        glVertex2f(*center)
+
+        # Small circles can affort 20 steps, for bigger circles,
+        # add enough steps that the largest line segment is 30 world units
+        steps = min(100, max(20, (radius * 2 * math.pi) / 30))
+
+        for angle in range(0, 361, int(360 / steps)):
+            direction = Vector2(radius, 0).rotate(angle)
+            glTexCoord2f(0.5 + 0.5 * direction.x / radius, 0.5 + 0.5 * direction.y / radius)
+            glVertex2f(*(center + direction))
+        glEnd()
+        glDisable(GL_BLEND)
+        glDisable(GL_TEXTURE_2D)
+
+        glBindTexture(GL_TEXTURE_2D, 0)
 
     def line(self, color: Color, from_point: Vector2, to_point: Vector2, width: float):
         width = max(1, width)
@@ -386,16 +423,17 @@ class PlanetSurfaceCoordinates(object):
 
 
 class Planet(IDrawable):
-    def __init__(self):
+    def __init__(self, artwork):
         self.position = Vector2(0, 0)
         self.radius = 3000
-        self.atmosphere_height = max(500, self.radius * 0.1)
+        self.atmosphere_height = max(500, self.radius * 0.2)
+        self.sprite = artwork.get_mars()
 
     def get_circumfence(self):
         return self.radius * 2 * math.pi
 
     def draw(self, ctx):
-        ctx.circle(Color(200, 40, 0), self.position, self.radius)
+        ctx.textured_circle(self.sprite, self.position, self.radius)
 
     def at(self, position: PlanetSurfaceCoordinates):
         return self.position + Vector2(0, -self.radius).rotate(position.angle_degrees)
@@ -647,7 +685,7 @@ class Game(Window, IUpdateReceiver):
         self.artwork = Artwork(self.resources)
         self.renderer = RenderContext(self.width, self.height, self.screen, self.resources)
 
-        self.planet = Planet()
+        self.planet = Planet(self.artwork)
 
         self.sectors = []
         self.houses = []
