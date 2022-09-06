@@ -10,13 +10,11 @@ from pygame.math import Vector2
 
 HERE = os.path.dirname(__file__) or '.'
 
-fontdir = os.path.join(HERE, 'font')
-imgdir = os.path.join(HERE, 'images')
 
 class Sprite(object):
     def __init__(self, filename: str):
         self.filename = filename
-        self.img = pygame.image.load(os.path.join(imgdir, filename))
+        self.img = pygame.image.load(filename)
         self.width, self.height = self.img.get_size()
 
         SCALING_FACTORS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
@@ -27,32 +25,50 @@ class Sprite(object):
         return next(img for img_factor, img in self._scaled if img_factor >= factor)
 
 
-TOMATO = [Sprite(filename) for filename in (
-              'tomato-fresh.png',
-              'tomato-yellow.png',
-              'tomato-ripe.png',
-              'tomato-bad.png',
-          )]
+class ResourceManager(object):
+    def __init__(self, root):
+        self.root = root
 
-LEAVES = [Sprite(f'leaf{num}.png') for num in (1, 2, 3)]
+    def dir(self, category: str):
+        return ResourceManager(self.filename(category))
 
-Z_BACK = 1
-Z_FRONT = 99
+    def filename(self, filename: str):
+        return os.path.join(self.root, filename)
 
+    def sprite(self, filename: str):
+        return Sprite(self.dir('images').filename(filename))
 
-WIDTH, HEIGHT = 1280, 720
-WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Red Planted")
-
-pygame.font.init()
-
-BACKGROUND_COLOR = (30, 30, 30)
+    def font(self, filename: str, point_size: int):
+        return pygame.font.Font(self.dir('font').filename(filename), point_size)
 
 
-class RenderContext():
-    def __init__(self, win):
+class Artwork(object):
+    def __init__(self, resources: ResourceManager):
+        self.tomato = [resources.sprite(filename) for filename in (
+            'tomato-fresh.png',
+            'tomato-yellow.png',
+            'tomato-ripe.png',
+            'tomato-bad.png',
+        )]
+        self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
+
+    def get_tomato_sprite(self, factor: float, rotten: bool):
+        if rotten:
+            return self.tomato[-1]
+
+        return self.tomato[max(0, min(2, int(factor*2.3)))]
+
+    def get_random_leaf(self):
+        return random.choice(self.leaves)
+
+
+class RenderContext(object):
+    Z_BACK = 1
+    Z_FRONT = 99
+
+    def __init__(self, win, resources: ResourceManager):
         self.win = win
-        self.font = pygame.font.Font(os.path.join(fontdir, 'RobotoMono-SemiBold.ttf'), 16)
+        self.font = resources.font('RobotoMono-SemiBold.ttf', 16)
         self.queue = []
 
     def sprite(self, sprite: Sprite, position: Vector2, scale: float = 1, z_order: int = 0):
@@ -95,7 +111,7 @@ class Branch(object):
         self.has_fruit = random.uniform(0, 300) < (self.plant.fertility + 10)
         self.has_leaf = not self.has_fruit
         self.fruit_rotten = False
-        self.leaf = random.choice(LEAVES)
+        self.leaf = plant.artwork.get_random_leaf()
         self.random_leaf_appearance_value = random.uniform(20, 70)
         self.random_fruit_appearance_value = random.uniform(40, 70)
 
@@ -176,18 +192,19 @@ class Branch(object):
 
         if not self.children and self.has_fruit:
             if self.plant.growth > self.random_fruit_appearance_value:
-                tomato = (TOMATO[int(factor*2.3)] if not self.fruit_rotten else TOMATO[-1])
-                ctx.sprite(tomato, to_point + Vector2(-(tomato.width*factor)/2, 0), scale=factor, z_order=Z_FRONT)
+                tomato = self.plant.artwork.get_tomato_sprite(factor, self.fruit_rotten)
+                ctx.sprite(tomato, to_point + Vector2(-(tomato.width*factor)/2, 0), scale=factor, z_order=ctx.Z_FRONT)
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
                 ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
-                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_order=Z_BACK)
+                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_order=ctx.Z_BACK)
 
 
 class Plant(object):
-    def __init__(self, pos, fertility):
+    def __init__(self, pos, fertility, artwork: Artwork):
         self.started = time.time()
         self.pos = pos
+        self.artwork = artwork
 
         self.growth = 0
         self.health = 100
@@ -355,6 +372,12 @@ class DebugGUI(Container):
 
 
 def main():
+    WIDTH, HEIGHT = 1280, 720
+    WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Red Planted")
+
+    pygame.font.init()
+
     run = True
 
     health_slider = Slider('health', 0, 100, 100)
@@ -363,9 +386,12 @@ def main():
 
     plants = []
 
+    resources = ResourceManager(HERE)
+    artwork = Artwork(resources)
+
     def make_new_plants(fertility_slider):
         nonlocal plants
-        plants = [Plant(Vector2(-WIDTH/7*(i-2), 0), int(fertility_slider.value)) for i in range(5)]
+        plants = [Plant(Vector2(-WIDTH/7*(i-2), 0), int(fertility_slider.value), artwork) for i in range(5)]
 
     fertility_slider._callback = make_new_plants
 
@@ -379,7 +405,7 @@ def main():
         ])
     ])
 
-    ctx = RenderContext(WIN)
+    ctx = RenderContext(WIN, resources)
 
     while run:
         for event in pygame.event.get():
@@ -391,6 +417,8 @@ def main():
                 gui.mousemove(event.pos)
             elif event.type == MOUSEBUTTONUP:
                 gui.mouseup(event.pos)
+
+        BACKGROUND_COLOR = (30, 30, 30)
         WIN.fill(BACKGROUND_COLOR)
 
         center = Vector2((WIDTH/2), (HEIGHT - 10))
