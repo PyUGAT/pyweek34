@@ -70,6 +70,19 @@ class RenderContext(object):
         self.win = win
         self.font = resources.font('RobotoMono-SemiBold.ttf', 16)
         self.queue = []
+        self.started = time.time()
+        self.now = 0
+
+    def __enter__(self):
+        self.now = time.time() - self.started
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pygame.display.update()
+        return False
+
+    def clear(self, color: Color):
+        self.win.fill(color)
 
     def sprite(self, sprite: Sprite, position: Vector2, scale: float = 1, z_order: int = 0):
         self.queue.append((z_order, sprite._get_scaled(scale), position))
@@ -93,6 +106,27 @@ class RenderContext(object):
         for z_order, img, position in sorted(self.queue, key=lambda item: item[0]):
             self.win.blit(img, position)
         self.queue = []
+
+
+class IMouseReceiver(object):
+    def mousedown(self, position: Vector2):
+        ...
+
+    def mousemove(self, position: Vector2):
+        ...
+
+    def mouseup(self, position: Vector2):
+        ...
+
+
+class IUpdateReceiver(object):
+    def update(self):
+        ...
+
+
+class IDrawable(object):
+    def draw(self, ctx: RenderContext):
+        ...
 
 
 class Branch(object):
@@ -175,7 +209,7 @@ class Branch(object):
         angle *= 180 * f
 
         # angle added due to wind
-        wind_angle = 10*math.sin(self.plant.wind_phase + self.plant.wind_speed * time.time())/max(1, 5-self.depth)
+        wind_angle = 10*math.sin(self.plant.wind_phase + self.plant.wind_speed * ctx.now)/max(1, 5-self.depth)
 
         direction = Vector2(0, -self.length).rotate(angle + wind_angle)
 
@@ -200,9 +234,10 @@ class Branch(object):
                 ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_order=ctx.Z_BACK)
 
 
-class Plant(object):
+class Plant(IUpdateReceiver):
     def __init__(self, pos, fertility, artwork: Artwork):
-        self.started = time.time()
+        super().__init__()
+
         self.pos = pos
         self.artwork = artwork
 
@@ -213,7 +248,9 @@ class Plant(object):
         self.wind_phase = random.uniform(0, 2*math.pi)
         self.wind_speed = random.uniform(0.9, 1.3)
 
-        self.root = Branch(phase=0, length=random.uniform(100, 500)*(0.5+0.5*self.fertility/100), leftright=+1, depth=0, plant=self)
+        length = random.uniform(100, 500)*(0.5+0.5*self.fertility/100)
+
+        self.root = Branch(phase=0, length=length, leftright=+1, depth=0, plant=self)
         self.root.grow()
         self.root.grow()
         self.root.grow()
@@ -224,15 +261,13 @@ class Plant(object):
         #self.growth = min(100, self.growth)
         self.root.update()
 
-    def draw(self, ctx, pos):
+    def draw(self, ctx):
         factor = self.growth / 100
 
-        rootpos = pos + self.pos
-
-        self.root.draw(ctx, rootpos, factor, 0., self.health)
+        self.root.draw(ctx, self.pos, factor, 0., self.health)
 
 
-class Widget:
+class Widget(IMouseReceiver, IDrawable):
     def __init__(self, w, h):
         self.rect = Rect(0, 0, w, h)
 
@@ -247,15 +282,6 @@ class Widget:
 
     def draw(self, ctx):
         ctx.rect(Color(70, 70, 70), self.rect)
-
-    def mousedown(self, pos):
-        ...
-
-    def mousemove(self, pos):
-        ...
-
-    def mouseup(self, pos):
-        ...
 
 
 class Container(Widget):
@@ -315,14 +341,14 @@ class Slider(Widget):
     WIDTH = 200
     HEIGHT = 30
 
-    def __init__(self, label, minimum, maximum, value):
+    def __init__(self, label, minimum, maximum, value, on_value_changed=None):
         super().__init__(self.WIDTH, self.HEIGHT)
         self.label = label
         self.min = minimum
         self.max = maximum
         self.value = value
         self._begin_drag = None
-        self._callback = None
+        self.on_value_changed = on_value_changed
 
     def layout(self):
         self.rect.size = (self.WIDTH, self.HEIGHT)
@@ -344,8 +370,8 @@ class Slider(Widget):
         self._begin_drag = Vector2(pos)
 
     def mouseup(self, pos):
-        if self._callback is not None:
-            self._callback(self)
+        if self.on_value_changed is not None:
+            self.on_value_changed()
 
 
 class DebugGUI(Container):
@@ -371,84 +397,108 @@ class DebugGUI(Container):
             self.focused = None
 
 
-def main():
-    WIDTH, HEIGHT = 1280, 720
-    WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Red Planted")
+class Window(object):
+    EVENT_TYPE_UPDATE = pygame.USEREVENT + 42
 
-    pygame.font.init()
+    def __init__(self, title: str, width: int = 1280, height: int = 720, updates_per_second: int = 60):
+        self.width = width
+        self.height = height
+        self.screen = pygame.display.set_mode((width, height))
+        pygame.display.set_caption(title)
+        pygame.font.init()
+        pygame.time.set_timer(self.EVENT_TYPE_UPDATE, int(1000 / updates_per_second))
+        self.running = True
 
-    run = True
-
-    health_slider = Slider('health', 0, 100, 100)
-    growth_slider = Slider('growth', 0, 100, 0)
-    fertility_slider = Slider('fertility', 0, 100, 5)
-
-    plants = []
-
-    resources = ResourceManager(HERE)
-    artwork = Artwork(resources)
-
-    def make_new_plants(fertility_slider):
-        nonlocal plants
-        plants = [Plant(Vector2(-WIDTH/7*(i-2), 0), int(fertility_slider.value), artwork) for i in range(5)]
-
-    fertility_slider._callback = make_new_plants
-
-    make_new_plants(fertility_slider)
-
-    gui = DebugGUI([
-        VBox([
-            health_slider,
-            growth_slider,
-            fertility_slider,
-        ])
-    ])
-
-    ctx = RenderContext(WIN, resources)
-
-    while run:
+    def process_events(self, *, mouse: IMouseReceiver, update: IUpdateReceiver):
         for event in pygame.event.get():
             if event.type == QUIT:
-                run = False
+                self.running = False
+                return
             elif event.type == MOUSEBUTTONDOWN:
-                gui.mousedown(event.pos)
+                mouse.mousedown(event.pos)
             elif event.type == MOUSEMOTION and event.buttons:
-                gui.mousemove(event.pos)
+                mouse.mousemove(event.pos)
             elif event.type == MOUSEBUTTONUP:
-                gui.mouseup(event.pos)
+                mouse.mouseup(event.pos)
+            elif event.type == self.EVENT_TYPE_UPDATE:
+                update.update()
 
-        BACKGROUND_COLOR = (30, 30, 30)
-        WIN.fill(BACKGROUND_COLOR)
+    def quit(self):
+        pygame.quit()
 
-        center = Vector2((WIDTH/2), (HEIGHT - 10))
 
-        for plant in plants:
-            plant.health = health_slider.value
-            plant.growth = growth_slider.value
-            plant.update()
-            plant.draw(ctx, center)
+class Game(Window, IUpdateReceiver):
+    def __init__(self, data_path: str = HERE):
+        super().__init__('Red Planted')
 
-        points = []
+        self.resources = ResourceManager(data_path)
+        self.artwork = Artwork(self.resources)
+        self.renderer = RenderContext(self.screen, self.resources)
 
-        for x in range(-10, WIDTH+10, 30):
-            points.append((x, HEIGHT-30+20*math.sin(x**77)))
+        self.plants = []
 
-        points.extend([
-            (WIDTH + 10, HEIGHT - 30),
-            (WIDTH + 10, HEIGHT + 10),
-            (- 10, HEIGHT + 10),
-            (- 10, HEIGHT - 30),
+        self.health_slider = Slider('health', 0, 100, 100)
+        self.growth_slider = Slider('growth', 0, 100, 0)
+        self.fertility_slider = Slider('fertility', 0, 100, 5, self.make_new_plants)
+
+        self.gui = DebugGUI([
+            VBox([
+                self.health_slider,
+                self.growth_slider,
+                self.fertility_slider,
+            ])
         ])
 
-        gui.draw(ctx)
+        self.make_new_plants()
 
-        ctx.flush()
+        self.ground_points = []
 
-        ctx.polygon(Color(60, 50, 0), points)
+        for x in range(-10, self.width+10, 30):
+            self.ground_points.append((x, self.height-30+20*math.sin(x**77)))
 
-        pygame.display.update()
-    pygame.quit()
+        self.ground_points.extend([
+            (self.width + 10, self.height - 30),
+            (self.width + 10, self.height + 10),
+            (- 10, self.height + 10),
+            (- 10, self.height - 30),
+        ])
+
+    def process_events(self):
+        super().process_events(mouse=self.gui, update=self)
+
+    def make_new_plants(self):
+        # TODO: Make plant relative to something
+        self.plants = [Plant(Vector2(self.width/2-self.width/7*(i-2), self.height - 10),
+                             int(self.fertility_slider.value), self.artwork) for i in range(5)]
+
+    def update(self):
+        for plant in self.plants:
+            plant.health = self.health_slider.value
+            plant.growth = self.growth_slider.value
+            plant.update()
+
+    def render_scene(self):
+        with self.renderer as ctx:
+            ctx.clear((30, 30, 30))
+
+            for plant in self.plants:
+                plant.draw(ctx)
+
+            ctx.flush()
+
+            ctx.polygon(Color(60, 50, 0), self.ground_points)
+
+            self.gui.draw(ctx)
+
+
+def main():
+    game = Game()
+
+    while game.running:
+        game.process_events()
+        game.render_scene()
+
+    game.quit()
 
 
 if __name__ == "__main__":
