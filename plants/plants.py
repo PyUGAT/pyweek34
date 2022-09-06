@@ -315,6 +315,11 @@ class RenderContext(object):
         self.queue = []
 
 
+class IClickReceiver(object):
+    def clicked(self):
+        ...
+
+
 class IMouseReceiver(object):
     def mousedown(self, position: Vector2):
         ...
@@ -339,7 +344,7 @@ class IDrawable(object):
         ...
 
 
-class Branch(object):
+class Branch(IClickReceiver):
     def __init__(self, phase, length, leftright, depth, plant):
         self.plant = plant
         self.phase = phase
@@ -358,6 +363,10 @@ class Branch(object):
         self.leaf = plant.artwork.get_random_leaf()
         self.random_leaf_appearance_value = random.uniform(20, 70)
         self.random_fruit_appearance_value = random.uniform(40, 70)
+
+    def clicked(self):
+        # TODO: Add score (check fruit_rotten first!)
+        self.has_fruit = False
 
     def grow(self):
         phase = random.uniform(0.1, 0.9)
@@ -725,6 +734,70 @@ class Window(object):
         pygame.quit()
 
 
+class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
+    def __init__(self, game, index, base_angle):
+        self.game = game
+        self.index = index
+        self.base_angle = base_angle
+        self.number_of_plants = random.choice([2, 3, 5, 6])
+        self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants]
+        self.fertility = int(random.uniform(10, 70))
+        self.plants = []
+        self.make_new_plants()
+
+    def clicked(self):
+        print(f"ouch, i'm a sector! {self.index}")
+        self.game.target_rotate = 360-(self.base_angle + self.sector_width_degrees / 2)
+        self.game.target_zoom = 100
+
+    def make_new_plants(self):
+        self.plants = []
+        for j in range(self.number_of_plants):
+            coordinate = PlanetSurfaceCoordinates(self.base_angle +
+                                                  self.sector_width_degrees * (j / (self.number_of_plants-1)))
+            self.plants.append(Plant(self.game.planet, coordinate, self.fertility, self.game.artwork))
+
+    def update(self):
+        for plant in self.plants:
+            plant.health = self.game.health_slider.value
+            plant.growth = self.game.growth_slider.value
+            plant.update()
+
+    def draw(self, ctx):
+        points = []
+        def add_point(p):
+            nonlocal points
+            points.append(self.game.transform_point_gl(p))
+
+        def add_fruit(branch, topleft, width, height):
+            aabb = aabb_from_points([
+                self.game.transform_point_gl(topleft),
+                self.game.transform_point_gl(topleft + Vector2(width, height)),
+            ])
+            self.game.debug_aabb.append(('fruit', Color(255, 255, 255), aabb, branch))
+
+        for plant in self.plants:
+            plant.draw(ctx, add_point, add_fruit)
+
+        if points:
+            self.game.debug_aabb.append((f'Sector {self.index}', Color(255, 255, 0), aabb_from_points(points), self))
+
+
+class Minimap(IClickReceiver):
+    def __init__(self, game):
+        self.game = game
+
+        fraction = 1/8
+        border = 20
+
+        size = Vector2(self.game.width, self.game.height) * fraction
+
+        self.rect = Rect(self.game.width - border - size.x, border, size.x, size.y)
+
+    def clicked(self):
+        self.game.target_zoom = 0 if self.game.zoom_slider.value > 50 else 100
+
+
 class Game(Window, IUpdateReceiver, IMouseReceiver):
     def __init__(self, data_path: str = os.path.join(HERE, 'data')):
         super().__init__('Red Planted')
@@ -742,7 +815,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.growth_slider = Slider('growth', 0, 100, 100)
         self.fertility_slider = Slider('fertility', 0, 100, 100, self.make_new_plants)
         self.zoom_slider = Slider('zoom', 0, 100, 100)
-        self.rotate_slider = Slider('rotate', 0, 100, 0)
+        self.rotate_slider = Slider('rotate', 0, 360, 0)
 
         self.gui = DebugGUI(self, [
             VBox([
@@ -754,34 +827,35 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             ])
         ])
 
-        minimap_size = Vector2(self.width, self.height) / 8
-        minimap_border = 20
+        self.minimap = Minimap(self)
 
-        self.minimap_rect = Rect(self.width - minimap_border - minimap_size.x,
-                                 minimap_border,
-                                 minimap_size.x,
-                                 minimap_size.y)
+        self.num_sectors = 8
+        for i in range(self.num_sectors):
+            sector = Sector(self, i, i*360/self.num_sectors)
+            self.sectors.append(sector)
 
-        self.make_new_plants()
+            coordinate = PlanetSurfaceCoordinates(sector.base_angle + 0.5 * 360 / self.num_sectors)
+            self.houses.append(House(self.planet, coordinate, self.artwork))
 
         self.target_zoom = None
+        self.target_rotate = None
 
         self.debug_aabb = []
         self.draw_debug_aabb = True
 
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
-        self.rotate_slider.value = (self.gui.wheel_sum.y * (10000 / self.planet.get_circumfence())) % 100
+        dy = self.gui.wheel_sum.y
+        self.rotate_slider.value += (dy * (30000 / self.planet.get_circumfence()))
+        self.rotate_slider.value %= self.rotate_slider.max
+        self.gui.wheel_sum.y = 0
 
     def mousedown(self, position: Vector2):
         for label, color, rect, obj in self.debug_aabb:
             if rect.collidepoint(position):
                 print('Clicked on:', label)
-                if isinstance(obj, Branch):
-                    obj.has_fruit = False
-                    # TODO: Make sure we abort processing here, to not pick two fruit at the same time
-                elif label == 'minimap':
-                    self.target_zoom = 0 if self.zoom_slider.value > 50 else 100
+                if isinstance(obj, IClickReceiver):
+                    obj.clicked()
 
     def mousemove(self, position: Vector2):
         ...
@@ -793,65 +867,35 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         ...
 
     def make_new_plants(self):
-        self.sectors = []
-        self.houses = []
-
-        steps = 8
-        for i in range(steps):
-            sector = []
-            substeps = random.choice([1, 2, 3, 5, 6])
-            #fertility = int(self.fertility_slider.value)
-            fertility = int(random.uniform(10, 70))
-
-            base_angle = i*360/steps
-
-            for j in range(substeps):
-                coordinate = PlanetSurfaceCoordinates(base_angle + 9 * (j / substeps))
-                sector.append(Plant(self.planet, coordinate, fertility, self.artwork))
-            self.sectors.append(sector)
-            self.houses.append(House(self.planet, PlanetSurfaceCoordinates(base_angle + 0.5 * 360 / steps),
-                                     self.artwork))
+        for sector in self.sectors:
+            sector.make_new_plants()
 
     def update(self):
-        if self.target_zoom is not None:
-            step = 3
-            if self.target_zoom < self.zoom_slider.value:
-                self.zoom_slider.value = min(100, max(0, int(self.zoom_slider.value - step)))
-                if self.target_zoom == self.zoom_slider.value:
-                    self.target_zoom = None
-            elif self.target_zoom > self.zoom_slider.value:
-                self.zoom_slider.value = min(100, max(0, int(self.zoom_slider.value + step)))
-                if self.target_zoom == self.zoom_slider.value:
-                    self.target_zoom = None
+        alpha = 0.08
+
+        if self.target_rotate is not None:
+            if abs(self.target_rotate - self.rotate_slider.value) < 2:
+                self.rotate_slider.value = self.target_rotate
+                self.target_rotate = None
+            else:
+                self.rotate_slider.value = alpha * self.target_rotate + (1 - alpha) * self.rotate_slider.value
+        elif self.target_zoom is not None:
+            if abs(self.target_zoom - self.zoom_slider.value) < 0.01:
+                self.zoom_slider.value = self.target_zoom
+                self.target_zoom = None
+            else:
+                self.zoom_slider.value = alpha * self.target_zoom + (1 - alpha) * self.zoom_slider.value
+
 
         for sector in self.sectors:
-            for plant in sector:
-                plant.health = self.health_slider.value
-                plant.growth = self.growth_slider.value
-                plant.update()
+            sector.update()
 
     def draw_scene(self, ctx, *, bg_color: Color, details: bool):
         ctx.clear(bg_color)
 
         if details:
-            for idx, sector in enumerate(self.sectors):
-                points = []
-                def add_point(p):
-                    nonlocal points
-                    points.append(self.transform_point_gl(p))
-
-                def add_fruit(branch, topleft, width, height):
-                    aabb = aabb_from_points([
-                        self.transform_point_gl(topleft),
-                        self.transform_point_gl(topleft + Vector2(width, height)),
-                    ])
-                    self.debug_aabb.append(('fruit', Color(255, 255, 255), aabb, branch))
-
-                for plant in sector:
-                    plant.draw(ctx, add_point, add_fruit)
-
-                if points:
-                    self.debug_aabb.append((f'Sector {idx}', Color(255, 255, 0), aabb_from_points(points), sector))
+            for sector in self.sectors:
+                sector.draw(ctx)
 
         for house in self.houses:
             house.draw(ctx)
@@ -865,22 +909,22 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             self.debug_aabb = []
 
             # Draw screen content
-            ctx.camera_mode_world(self.planet, self.zoom_slider.value / 100, self.rotate_slider.value / 100)
+            ctx.camera_mode_world(self.planet, self.zoom_slider.value / 100, self.rotate_slider.value / 360)
             self.draw_scene(ctx, bg_color=Color(30, 30, 30), details=True)
 
             # GL coordinate system origin = bottom left
-            minimap_gl_rect = (int(self.minimap_rect.x),
-                       int(self.height - self.minimap_rect.height - self.minimap_rect.y),
-                       int(self.minimap_rect.width),
-                       int(self.minimap_rect.height))
+            minimap_gl_rect = (int(self.minimap.rect.x),
+                       int(self.height - self.minimap.rect.height - self.minimap.rect.y),
+                       int(self.minimap.rect.width),
+                       int(self.minimap.rect.height))
 
             glViewport(*minimap_gl_rect)
             glScissor(*minimap_gl_rect)
             glEnable(GL_SCISSOR_TEST)
 
-            self.debug_aabb.append(('minimap', Color(0, 255, 255), self.minimap_rect, self))
+            self.debug_aabb.append(('minimap', Color(0, 255, 255), self.minimap.rect, self.minimap))
 
-            ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 100)
+            ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 360)
             # TODO: Draw stylized scene
             self.draw_scene(ctx, bg_color=Color(10, 10, 10), details=False)
 
