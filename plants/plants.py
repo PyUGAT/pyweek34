@@ -12,6 +12,10 @@ from OpenGL.GL import *
 
 HERE = os.path.dirname(__file__) or '.'
 
+LEFT_MOUSE_BUTTON = 1
+MIDDLE_MOUSE_BUTTON = 2
+RIGHT_MOUSE_BUTTON = 3
+
 
 class Texture(object):
     def __init__(self, sprite):
@@ -118,13 +122,34 @@ class RenderContext(object):
         return False
 
     def camera_mode_overlay(self):
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        glOrtho(0, self.width, self.height, 0, 0, 1)
+
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
-    def camera_mode_world(self):
+    def camera_mode_world(self, planet, zoom, rotate):
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+
+        left = -self.width / 2
+        right = self.width / 2
+        bottom = self.height / 2
+        top = -self.height / 2
+
+        glOrtho(left, right, bottom, top, 0, 1)
+
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
-        #glScalef(0.2, 0.2, 0.2)
+
+        min_zoom = min(self.width, self.height) / ((planet.radius + planet.atmosphere_height) * 2)
+
+        factor = min_zoom + (1.0 - min_zoom) * (1 - (1 - zoom))
+        glTranslatef(-planet.position.x, -planet.position.y, 0)
+        glTranslatef(0, (zoom**.8) * (planet.radius + self.height / 3), 0)
+        glScalef(factor, factor, factor)
+        glRotatef(rotate * 360, 0, 0, 1)
 
     def clear(self, color: Color):
         glClearColor(*color.normalize())
@@ -155,18 +180,29 @@ class RenderContext(object):
 
         # Small circles can affort 20 steps, for bigger circles,
         # add enough steps that the largest line segment is 30 world units
-        steps = max(20, (radius * 2 * math.pi) / 30)
+        steps = min(100, max(20, (radius * 2 * math.pi) / 30))
 
         for angle in range(0, 361, int(360 / steps)):
             glVertex2f(*(center + Vector2(radius, 0).rotate(angle)))
         glEnd()
 
     def line(self, color: Color, from_point: Vector2, to_point: Vector2, width: float):
-        glLineWidth(max(1, width))
-        glBegin(GL_LINES)
+        width = max(1, width)
+
+        side = (to_point - from_point).normalize().rotate(90) * (width / 2)
+        a = from_point + side
+        b = from_point - side
+        c = to_point + side
+        d = to_point - side
+
+        glBegin(GL_TRIANGLE_STRIP)
         glColor4f(*color.normalize())
-        glVertex2f(*from_point)
-        glVertex2f(*to_point)
+
+        glVertex2f(*a)
+        glVertex2f(*b)
+        glVertex2f(*c)
+        glVertex2f(*d)
+
         glEnd()
 
     def _blit(self, sprite: Sprite, position, scale: float = 1):
@@ -219,6 +255,9 @@ class IMouseReceiver(object):
         ...
 
     def mouseup(self, position: Vector2):
+        ...
+
+    def mousewheel(self, x: float, y: float, flipped: bool):
         ...
 
 
@@ -337,11 +376,38 @@ class Branch(object):
                 ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_order=ctx.Z_BACK)
 
 
+class PlanetSurfaceCoordinates(object):
+    def __init__(self, angle_degrees: float):
+        self.angle_degrees = angle_degrees
+
+
+class Planet(IDrawable):
+    def __init__(self):
+        self.position = Vector2(0, 0)
+        self.radius = 3000
+        self.atmosphere_height = max(500, self.radius * 0.1)
+
+    def get_circumfence(self):
+        return self.radius * 2 * math.pi
+
+    def draw(self, ctx):
+        ctx.circle(Color(200, 40, 0), self.position, self.radius)
+
+    def at(self, position: PlanetSurfaceCoordinates):
+        return self.position + Vector2(0, -self.radius).rotate(position.angle_degrees)
+
+    def apply_gl_transform(self, position: PlanetSurfaceCoordinates):
+        glTranslatef(*self.at(position), 0)
+        glRotatef(position.angle_degrees, 0, 0, 1)
+
+
+
 class Plant(IUpdateReceiver):
-    def __init__(self, pos, fertility, artwork: Artwork):
+    def __init__(self, planet: Planet, position: PlanetSurfaceCoordinates, fertility, artwork: Artwork):
         super().__init__()
 
-        self.pos = pos
+        self.planet = planet
+        self.position = position
         self.artwork = artwork
 
         self.growth = 0
@@ -369,7 +435,8 @@ class Plant(IUpdateReceiver):
 
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
-        glTranslatef(self.pos.x, self.pos.y, 0)
+
+        self.planet.apply_gl_transform(self.position)
 
         self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health)
 
@@ -490,6 +557,7 @@ class DebugGUI(Container):
             for widget in widgets:
                 self.add(widget)
         self.focused = None
+        self.wheel_sum = Vector2(0, 0)
 
     def mousedown(self, pos):
         self.focused = self.pick(pos)
@@ -504,6 +572,10 @@ class DebugGUI(Container):
         if self.focused:
             self.focused.mouseup(pos)
             self.focused = None
+
+    def mousewheel(self, x: float, y: float, flipped: bool):
+        self.wheel_sum.x += x
+        self.wheel_sum.y += y
 
 
 class Window(object):
@@ -529,12 +601,14 @@ class Window(object):
             if event.type == QUIT:
                 self.running = False
                 return
-            elif event.type == MOUSEBUTTONDOWN:
+            elif event.type == MOUSEBUTTONDOWN and event.button == LEFT_MOUSE_BUTTON:
                 mouse.mousedown(event.pos)
             elif event.type == MOUSEMOTION and event.buttons:
                 mouse.mousemove(event.pos)
-            elif event.type == MOUSEBUTTONUP:
+            elif event.type == MOUSEBUTTONUP and event.button == LEFT_MOUSE_BUTTON:
                 mouse.mouseup(event.pos)
+            elif event.type == MOUSEWHEEL:
+                mouse.mousewheel(event.x, event.y, event.flipped)
             elif event.type == self.EVENT_TYPE_UPDATE:
                 update.update()
 
@@ -550,17 +624,23 @@ class Game(Window, IUpdateReceiver):
         self.artwork = Artwork(self.resources)
         self.renderer = RenderContext(self.width, self.height, self.screen, self.resources)
 
-        self.plants = []
+        self.planet = Planet()
+
+        self.sectors = []
 
         self.health_slider = Slider('health', 0, 100, 100)
-        self.growth_slider = Slider('growth', 0, 100, 0)
-        self.fertility_slider = Slider('fertility', 0, 100, 5, self.make_new_plants)
+        self.growth_slider = Slider('growth', 0, 100, 100)
+        self.fertility_slider = Slider('fertility', 0, 100, 100, self.make_new_plants)
+        self.zoom_slider = Slider('zoom', 0, 100, 100)
+        self.rotate_slider = Slider('rotate', 0, 100, 0)
 
         self.gui = DebugGUI([
             VBox([
                 self.health_slider,
                 self.growth_slider,
                 self.fertility_slider,
+                self.zoom_slider,
+                self.rotate_slider,
             ])
         ])
 
@@ -568,32 +648,69 @@ class Game(Window, IUpdateReceiver):
 
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
+        self.rotate_slider.value = (self.gui.wheel_sum.y * (10000 / self.planet.get_circumfence())) % 100
 
     def make_new_plants(self):
-        # TODO: Make plant relative to something
-        self.plants = [Plant(Vector2(self.width/2-self.width/7*(i-2), self.height - 10),
-                             int(self.fertility_slider.value), self.artwork) for i in range(5)]
+        self.sectors = []
+
+        steps = 8
+        for i in range(steps):
+            sector = []
+            substeps = random.choice([1, 2, 3, 5, 6])
+            #fertility = int(self.fertility_slider.value)
+            fertility = int(random.uniform(10, 70))
+            for j in range(substeps):
+                coordinate = PlanetSurfaceCoordinates(i*360/steps + 9 * (j / substeps))
+                sector.append(Plant(self.planet, coordinate, fertility, self.artwork))
+            self.sectors.append(sector)
 
     def update(self):
-        for plant in self.plants:
-            plant.health = self.health_slider.value
-            plant.growth = self.growth_slider.value
-            plant.update()
+        for sector in self.sectors:
+            for plant in sector:
+                plant.health = self.health_slider.value
+                plant.growth = self.growth_slider.value
+                plant.update()
+
+    def draw_scene(self, ctx, *, bg_color: Color, details: bool):
+        ctx.clear(bg_color)
+
+        if details:
+            for sector in self.sectors:
+                for plant in sector:
+                    plant.draw(ctx)
+
+        self.planet.draw(ctx)
+
+        ctx.flush()
 
     def render_scene(self):
         with self.renderer as ctx:
-            ctx.clear(Color(30, 30, 30))
+            # Draw screen content
+            ctx.camera_mode_world(self.planet, self.zoom_slider.value / 100, self.rotate_slider.value / 100)
+            self.draw_scene(ctx, bg_color=Color(30, 30, 30), details=True)
 
-            ctx.camera_mode_world()
+            # Draw minimap
+            minimap_size = Vector2(self.width, self.height) / 10
+            minimap_border = 30
 
-            for plant in self.plants:
-                plant.draw(ctx)
+            mmx = int(self.width - minimap_border - minimap_size.x)
+            mmy = int(self.height - minimap_border - minimap_size.y)
+            mmh = int(minimap_size.y)
+            mmw = int(minimap_size.x)
 
-            ctx.flush()
+            glViewport(mmx, mmy, mmw, mmh)
+            glScissor(mmx, mmy, mmw, mmh)
+            glEnable(GL_SCISSOR_TEST)
 
-            # Planet
-            ctx.circle(Color(200, 40, 0), Vector2(self.width / 2, self.height + 900), 1000)
+            ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 100)
+            # TODO: Draw stylized scene
+            self.draw_scene(ctx, bg_color=Color(10, 10, 10), details=False)
 
+            glDisable(GL_SCISSOR_TEST)
+            glViewport(0, 0, self.width, self.height)
+            glScissor(0, 0, self.width, self.height)
+
+            # Draw GUI overlay
             ctx.camera_mode_overlay()
             self.gui.draw(ctx)
 
