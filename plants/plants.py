@@ -45,17 +45,33 @@ WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Red Planted")
 
 pygame.font.init()
-font = pygame.font.Font(os.path.join(fontdir, 'RobotoMono-SemiBold.ttf'), 16)
 
 BACKGROUND_COLOR = (30, 30, 30)
+
 
 class RenderContext():
     def __init__(self, win):
         self.win = win
+        self.font = pygame.font.Font(os.path.join(fontdir, 'RobotoMono-SemiBold.ttf'), 16)
         self.queue = []
 
     def sprite(self, sprite: Sprite, position: Vector2, scale: float = 1, z_order: int = 0):
         self.queue.append((z_order, sprite._get_scaled(scale), position))
+
+    def text(self, text: str, color: Color, position: Vector2):
+        self.win.blit(self.font.render(text, True, color), position)
+
+    def rect(self, color: Color, rectangle: Rect):
+        pygame.draw.rect(self.win, color, rectangle)
+
+    def circle(self, color: Color, center: Vector2, radius: float):
+        pygame.draw.circle(self.win, color, center, radius)
+
+    def line(self, color: Color, from_point: Vector2, to_point: Vector2, width: float):
+        pygame.draw.polygon(self.win, color, [from_point, to_point], max(1, int(width)))
+
+    def polygon(self, color: Color, points: [Vector2]):
+        pygame.draw.polygon(self.win, color, points)
 
     def flush(self):
         for z_order, img, position in sorted(self.queue, key=lambda item: item[0]):
@@ -147,12 +163,12 @@ class Branch(object):
 
         direction = Vector2(0, -self.length).rotate(angle + wind_angle)
 
-        points = [pos, pos + direction * factor]
+        to_point = pos + direction * factor
         cm1 = 1.0 - ((1.0 - self.color_mod) * health/100)
         cm2 = 1.0 - ((1.0 - self.color_mod2) * health/100)
         color = (cm1 * (100-health), cm2 * (244-150+health*1.5), 0)
 
-        pygame.draw.polygon(ctx.win, color, points, width=max(1, int(self.thickness*self.plant.growth/100)))
+        ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100)
 
         for child in self.children:
             child_factor = max(0, (factor - child.phase) / (1 - child.phase))
@@ -161,11 +177,11 @@ class Branch(object):
         if not self.children and self.has_fruit:
             if self.plant.growth > self.random_fruit_appearance_value:
                 tomato = (TOMATO[int(factor*2.3)] if not self.fruit_rotten else TOMATO[-1])
-                ctx.sprite(tomato, points[-1] + Vector2(-(tomato.width*factor)/2, 0), scale=factor, z_order=Z_FRONT)
+                ctx.sprite(tomato, to_point + Vector2(-(tomato.width*factor)/2, 0), scale=factor, z_order=Z_FRONT)
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
                 ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
-                ctx.sprite(self.leaf, points[-1] + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_order=Z_BACK)
+                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_order=Z_BACK)
 
 
 class Plant(object):
@@ -197,7 +213,6 @@ class Plant(object):
         rootpos = pos + self.pos
 
         self.root.draw(ctx, rootpos, factor, 0., self.health)
-        #ctx.win.blit(font.render(f'health={self.health:.0f}', True, (255, 255, 255)), rootpos - Vector2(0, 20))
 
 
 class Widget:
@@ -214,7 +229,7 @@ class Widget:
         return None
 
     def draw(self, ctx):
-        pygame.draw.rect(ctx.win, (70, 70, 70), self.rect)
+        ctx.rect(Color(70, 70, 70), self.rect)
 
     def mousedown(self, pos):
         ...
@@ -299,9 +314,9 @@ class Slider(Widget):
         super().draw(ctx)
         fraction = (self.value - self.min) / (self.max - self.min)
         radius = self.rect.height / 2
-        pygame.draw.circle(ctx.win, (200, 200, 255),
-                self.rect.topleft + Vector2(radius + (self.rect.width - 2 * radius) * fraction, self.rect.height / 2), radius)
-        ctx.win.blit(font.render(f'{self.label}: {self.value:.0f}', True, (255, 255, 255)), self.rect.topleft)
+        center = self.rect.topleft + Vector2(radius + (self.rect.width - 2 * radius) * fraction, self.rect.height / 2)
+        ctx.circle(Color(200, 200, 255), center, radius)
+        ctx.text(f'{self.label}: {self.value:.0f}', Color(255, 255, 255), self.rect.topleft)
 
     def mousedown(self, pos):
         self._begin_drag = Vector2(pos)
@@ -364,6 +379,8 @@ def main():
         ])
     ])
 
+    ctx = RenderContext(WIN)
+
     while run:
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -377,8 +394,6 @@ def main():
         WIN.fill(BACKGROUND_COLOR)
 
         center = Vector2((WIDTH/2), (HEIGHT - 10))
-
-        ctx = RenderContext(WIN)
 
         for plant in plants:
             plant.health = health_slider.value
@@ -402,7 +417,7 @@ def main():
 
         ctx.flush()
 
-        pygame.draw.polygon(ctx.win, (60, 50, 0), points)
+        ctx.polygon(Color(60, 50, 0), points)
 
         pygame.display.update()
     pygame.quit()
