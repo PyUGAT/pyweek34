@@ -14,3 +14,4 @@ Sources:
 
     https://opengameart.org/content/good-fruits-m484-games
     https://opengameart.org/content/stylized-branches-texture
+    https://opengameart.org/content/tent-8

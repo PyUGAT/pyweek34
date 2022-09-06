@@ -84,6 +84,7 @@ class Artwork(object):
             'tomato-bad.png',
         )]
         self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
+        self.houses = [resources.sprite(f'house{num}.png') for num in (1, 2, 3, 4)]
 
     def get_tomato_sprite(self, factor: float, rotten: bool):
         if rotten:
@@ -93,6 +94,9 @@ class Artwork(object):
 
     def get_random_leaf(self):
         return random.choice(self.leaves)
+
+    def get_random_house(self):
+        return random.choice(self.houses)
 
 
 class RenderContext(object):
@@ -443,6 +447,25 @@ class Plant(IUpdateReceiver):
         glPopMatrix()
 
 
+class House(IDrawable):
+    def __init__(self, planet: Planet, position: PlanetSurfaceCoordinates, artwork: Artwork):
+        self.planet = planet
+        self.position = position
+        self.artwork = artwork
+
+        self.house = artwork.get_random_house()
+
+    def draw(self, ctx):
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+
+        self.planet.apply_gl_transform(self.position)
+
+        ctx.sprite(self.house, Vector2(-self.house.width/2, -self.house.height + 10))
+
+        glPopMatrix()
+
+
 class Widget(IMouseReceiver, IDrawable):
     def __init__(self, w, h):
         self.rect = Rect(0, 0, w, h)
@@ -627,6 +650,7 @@ class Game(Window, IUpdateReceiver):
         self.planet = Planet()
 
         self.sectors = []
+        self.houses = []
 
         self.health_slider = Slider('health', 0, 100, 100)
         self.growth_slider = Slider('growth', 0, 100, 100)
@@ -652,6 +676,7 @@ class Game(Window, IUpdateReceiver):
 
     def make_new_plants(self):
         self.sectors = []
+        self.houses = []
 
         steps = 8
         for i in range(steps):
@@ -659,10 +684,15 @@ class Game(Window, IUpdateReceiver):
             substeps = random.choice([1, 2, 3, 5, 6])
             #fertility = int(self.fertility_slider.value)
             fertility = int(random.uniform(10, 70))
+
+            base_angle = i*360/steps
+
             for j in range(substeps):
-                coordinate = PlanetSurfaceCoordinates(i*360/steps + 9 * (j / substeps))
+                coordinate = PlanetSurfaceCoordinates(base_angle + 9 * (j / substeps))
                 sector.append(Plant(self.planet, coordinate, fertility, self.artwork))
             self.sectors.append(sector)
+            self.houses.append(House(self.planet, PlanetSurfaceCoordinates(base_angle + 0.5 * 360 / steps),
+                                     self.artwork))
 
     def update(self):
         for sector in self.sectors:
@@ -678,6 +708,9 @@ class Game(Window, IUpdateReceiver):
             for sector in self.sectors:
                 for plant in sector:
                     plant.draw(ctx)
+
+        for house in self.houses:
+            house.draw(ctx)
 
         self.planet.draw(ctx)
 
