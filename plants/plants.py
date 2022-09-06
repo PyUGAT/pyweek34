@@ -13,30 +13,32 @@ HERE = os.path.dirname(__file__) or '.'
 fontdir = os.path.join(HERE, 'font')
 imgdir = os.path.join(HERE, 'images')
 
-TOMATO = [
-    pygame.image.load(os.path.join(imgdir, 'tomato-fresh.png')),
-    pygame.image.load(os.path.join(imgdir, 'tomato-yellow.png')),
-    pygame.image.load(os.path.join(imgdir, 'tomato-ripe.png')),
-    pygame.image.load(os.path.join(imgdir, 'tomato-bad.png')),
-]
+class Sprite(object):
+    def __init__(self, filename: str):
+        self.filename = filename
+        self.img = pygame.image.load(os.path.join(imgdir, filename))
+        self.width, self.height = self.img.get_size()
 
-LEAVES = [
-    pygame.image.load(os.path.join(imgdir, 'leaf1.png')),
-    pygame.image.load(os.path.join(imgdir, 'leaf2.png')),
-    pygame.image.load(os.path.join(imgdir, 'leaf3.png')),
-]
+        SCALING_FACTORS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
+        self._scaled = [(scale, pygame.transform.scale(self.img, tuple(Vector2(self.img.get_size()) * scale)))
+                       for scale in SCALING_FACTORS]
 
-SCALING_FACTORS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
+    def _get_scaled(self, factor):
+        return next(img for img_factor, img in self._scaled if img_factor >= factor)
 
-TOMATO = [
-    [(scale, pygame.transform.scale(img, tuple(Vector2(img.get_size()) * scale * 3)))
-        for scale in SCALING_FACTORS]
-    for img in TOMATO]
 
-LEAVES = [
-    [(scale, pygame.transform.scale(img, tuple(Vector2(img.get_size()) * scale)))
-        for scale in SCALING_FACTORS]
-    for img in LEAVES]
+TOMATO = [Sprite(filename) for filename in (
+              'tomato-fresh.png',
+              'tomato-yellow.png',
+              'tomato-ripe.png',
+              'tomato-bad.png',
+          )]
+
+LEAVES = [Sprite(f'leaf{num}.png') for num in (1, 2, 3)]
+
+Z_BACK = 1
+Z_FRONT = 99
+
 
 WIDTH, HEIGHT = 1280, 720
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -52,10 +54,13 @@ class RenderContext():
         self.win = win
         self.queue = []
 
+    def sprite(self, sprite: Sprite, position: Vector2, scale: float = 1, z_order: int = 0):
+        self.queue.append((z_order, sprite._get_scaled(scale), position))
+
     def flush(self):
-        while self.queue:
-            img, pos = self.queue.pop()
-            self.win.blit(img, pos)
+        for z_order, img, position in sorted(self.queue, key=lambda item: item[0]):
+            self.win.blit(img, position)
+        self.queue = []
 
 
 class Branch(object):
@@ -155,15 +160,12 @@ class Branch(object):
 
         if not self.children and self.has_fruit:
             if self.plant.growth > self.random_fruit_appearance_value:
-                fruit_color_fresh = Color(100, 255, 0)
-                fruit_color_ripe = Color(255, 50, 0)
-                img = next(img for imgf, img in (TOMATO[int(factor*2.3)] if not self.fruit_rotten else TOMATO[-1]) if imgf >= factor)
-                ctx.queue.append((img, points[-1] + Vector2(-img.get_width()/2, 0)))
+                tomato = (TOMATO[int(factor*2.3)] if not self.fruit_rotten else TOMATO[-1])
+                ctx.sprite(tomato, points[-1] + Vector2(-(tomato.width*factor)/2, 0), scale=factor, z_order=Z_FRONT)
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
                 ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
-                img = next(img for imgf, img in self.leaf if imgf >= ff)
-                ctx.win.blit(img, points[-1] + Vector2(-img.get_width()/2, 0))
+                ctx.sprite(self.leaf, points[-1] + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_order=Z_BACK)
 
 
 class Plant(object):
