@@ -706,6 +706,14 @@ class Game(Window, IUpdateReceiver):
             ])
         ])
 
+        minimap_size = Vector2(self.width, self.height) / 8
+        minimap_border = 20
+
+        self.minimap_rect = Rect(self.width - minimap_border - minimap_size.x,
+                                 minimap_border,
+                                 minimap_size.x,
+                                 minimap_size.y)
+
         self.make_new_plants()
 
     def process_events(self):
@@ -760,17 +768,14 @@ class Game(Window, IUpdateReceiver):
             ctx.camera_mode_world(self.planet, self.zoom_slider.value / 100, self.rotate_slider.value / 100)
             self.draw_scene(ctx, bg_color=Color(30, 30, 30), details=True)
 
-            # Draw minimap
-            minimap_size = Vector2(self.width, self.height) / 10
-            minimap_border = 30
+            # GL coordinate system origin = bottom left
+            minimap_gl_rect = (int(self.minimap_rect.x),
+                       int(self.height - self.minimap_rect.height - self.minimap_rect.y),
+                       int(self.minimap_rect.width),
+                       int(self.minimap_rect.height))
 
-            mmx = int(self.width - minimap_border - minimap_size.x)
-            mmy = int(self.height - minimap_border - minimap_size.y)
-            mmh = int(minimap_size.y)
-            mmw = int(minimap_size.x)
-
-            glViewport(mmx, mmy, mmw, mmh)
-            glScissor(mmx, mmy, mmw, mmh)
+            glViewport(*minimap_gl_rect)
+            glScissor(*minimap_gl_rect)
             glEnable(GL_SCISSOR_TEST)
 
             ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 100)
