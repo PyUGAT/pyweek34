@@ -285,6 +285,39 @@ class DrawSpriteTask(IDrawTask):
         glBindTexture(GL_TEXTURE_2D, 0)
 
 
+class DrawColoredVerticesTask(IDrawTask):
+    def __init__(self, mode):
+        self.data = array.array('f')
+        self.mode = mode
+
+    def append(self, color: Color, vertices: [Vector2], apply_modelview_matrix):
+        r, g, b, a = color.normalize()
+
+        for v in vertices:
+            vertex = apply_modelview_matrix(v)
+            self.data.extend((vertex.x, vertex.y, r, g, b, a))
+
+    def draw(self):
+        buf = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, buf)
+        glBufferData(GL_ARRAY_BUFFER, self.data.tobytes(), GL_STATIC_DRAW)
+
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glVertexPointer(2, GL_FLOAT, 6 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(0))
+
+        glEnableClientState(GL_COLOR_ARRAY)
+        glColorPointer(4, GL_FLOAT, 6 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
+
+        glDrawArrays(self.mode, 0, int(len(self.data) / 6))
+
+        glDisableClientState(GL_COLOR_ARRAY)
+        glDisableClientState(GL_VERTEX_ARRAY)
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+        glDeleteBuffers(1, [buf])
+
+
 class MatrixStack(object):
     def __init__(self):
         self.stack = [Matrix3x3()]
@@ -353,7 +386,8 @@ class FontCache(object):
 
 
 class RenderContext(object):
-    LAYER_BEHIND = 1
+    LAYER_BRANCHES = 60
+    LAYER_LEAVES = 70
     LAYER_FRONT = 99
 
     def __init__(self, width, height, resources: ResourceManager):
@@ -433,42 +467,49 @@ class RenderContext(object):
         self.queue[key].append(position, scale, self.modelview_matrix_stack.apply)
 
     def text(self, text: str, color: Color, position: Vector2):
-        # FIXME: Batching
-        self._blit(self.font_cache.lookup(text, color), position)
+        self.sprite(self.font_cache.lookup(text, color), position)
 
-    def rect(self, color: Color, rectangle: Rect):
-        glBegin(GL_TRIANGLES)
-        glColor4f(*color.normalize())
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topright))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomleft))
-        glEnd()
+    def rect(self, color: Color, rectangle: Rect, *, z_layer: int = 0):
+        self._colored_vertices(GL_TRIANGLES, color, [
+            rectangle.topleft,
+            rectangle.topright,
+            rectangle.bottomright,
+
+            rectangle.topleft,
+            rectangle.bottomright,
+            rectangle.bottomleft,
+        ], z_layer=z_layer)
 
     def aabb(self, color: Color, rectangle: Rect):
-        glBegin(GL_LINE_STRIP)
-        glColor4f(*color.normalize())
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topright))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomleft))
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
-        glEnd()
+        self._colored_vertices(GL_LINES, color, [
+            rectangle.topleft,
+            rectangle.topright,
+
+            rectangle.topright,
+            rectangle.bottomright,
+
+            rectangle.bottomright,
+            rectangle.bottomleft,
+
+            rectangle.bottomleft,
+            rectangle.topleft,
+        ])
 
     def circle(self, color: Color, center: Vector2, radius: float):
-        glBegin(GL_TRIANGLE_FAN)
-        glColor4f(*color.normalize())
-        glVertex2f(*self.modelview_matrix_stack.apply(center))
-
         # Small circles can affort 20 steps, for bigger circles,
         # add enough steps that the largest line segment is 30 world units
         steps = min(100, max(20, (radius * 2 * math.pi) / 30))
 
+        vertices = []
         for angle in range(0, 361, int(360 / steps)):
-            glVertex2f(*self.modelview_matrix_stack.apply(center + Vector2(radius, 0).rotate(angle)))
-        glEnd()
+            vertices.append(center)
+            vertices.append(center + Vector2(radius, 0).rotate(angle))
+
+        # break triangle strip (duplicate first and last vertex -> degenerate triangle)
+        vertices.append(vertices[-1])
+        vertices.insert(0, vertices[0])
+
+        self._colored_vertices(GL_TRIANGLE_STRIP, color, vertices)
 
     def textured_circle(self, sprite: Sprite, center: Vector2, radius: float):
         texture = sprite._get_texture()
@@ -498,7 +539,7 @@ class RenderContext(object):
 
         glBindTexture(GL_TEXTURE_2D, 0)
 
-    def line(self, color: Color, from_point: Vector2, to_point: Vector2, width: float):
+    def line(self, color: Color, from_point: Vector2, to_point: Vector2, width: float, *, z_layer: int = 0):
         width = max(1, width)
 
         side = (to_point - from_point).normalize().rotate(90) * (width / 2)
@@ -507,47 +548,14 @@ class RenderContext(object):
         c = to_point + side
         d = to_point - side
 
-        glBegin(GL_TRIANGLE_STRIP)
-        glColor4f(*color.normalize())
+        self._colored_vertices(GL_TRIANGLES, color, [a, b, c, b, c, d], z_layer=z_layer)
 
-        glVertex2f(*self.modelview_matrix_stack.apply(a))
-        glVertex2f(*self.modelview_matrix_stack.apply(b))
-        glVertex2f(*self.modelview_matrix_stack.apply(c))
-        glVertex2f(*self.modelview_matrix_stack.apply(d))
+    def _colored_vertices(self, mode: int, color: Color, vertices: [Vector2], *, z_layer: int = 0):
+        key = (z_layer, mode)
+        if key not in self.queue:
+            self.queue[key] = DrawColoredVerticesTask(mode)
 
-        glEnd()
-
-    def _blit(self, sprite: Sprite, position, scale: float = 1):
-        width, height = sprite.width, sprite.height
-
-        rectangle = Rect(position.x, position.y, width * scale, height * scale)
-
-        texture = sprite._get_texture()
-
-        glBindTexture(GL_TEXTURE_2D, texture.id)
-
-        glEnable(GL_TEXTURE_2D)
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        glBegin(GL_TRIANGLES)
-        glColor4f(1, 1, 1, 1)
-        glTexCoord2f(0, 0)
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
-        glTexCoord2f(1, 0)
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topright))
-        glTexCoord2f(1, 1)
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
-        glTexCoord2f(0, 0)
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
-        glTexCoord2f(1, 1)
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
-        glTexCoord2f(0, 1)
-        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomleft))
-        glEnd()
-        glDisable(GL_BLEND)
-        glDisable(GL_TEXTURE_2D)
-
-        glBindTexture(GL_TEXTURE_2D, 0)
+        self.queue[key].append(color, vertices, self.modelview_matrix_stack.apply)
 
     def flush(self):
         for (z_layer, *key_args), task in sorted(self.queue.items(), key=lambda kv: kv[0][0]):
@@ -688,7 +696,7 @@ class Branch(IClickReceiver):
 
         zoom_adj = (100-self.plant.sector.game.zoom_slider.value)/100
 
-        ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100 + 30 * zoom_adj)
+        ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100 + 30 * zoom_adj, z_layer=ctx.LAYER_BRANCHES)
 
         for child in self.children:
             child_factor = max(0, (factor - child.phase) / (1 - child.phase))
@@ -716,7 +724,7 @@ class Branch(IClickReceiver):
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
                 ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
-                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_layer=ctx.LAYER_BEHIND)
+                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_layer=ctx.LAYER_LEAVES)
 
 
 class PlanetSurfaceCoordinates(object):
@@ -984,7 +992,7 @@ class Slider(Widget):
         fraction = (self.value - self.min) / (self.max - self.min)
         radius = self.rect.height / 2
         center = self.rect.topleft + Vector2(radius + (self.rect.width - 2 * radius) * fraction, self.rect.height / 2)
-        ctx.rect(Color(200, 200, 255), Rect(center.x - radius, center.y - radius, 2 * radius, 2 * radius))
+        ctx.circle(Color(200, 200, 255), center, radius)
         ctx.text(f'{self.label}: {self.value:.0f}', Color(255, 255, 255), Vector2(self.rect.topleft))
 
     def mousedown(self, pos):
@@ -1234,6 +1242,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             # Draw GUI overlay
             ctx.camera_mode_overlay()
             self.gui.draw(ctx)
+            ctx.flush()
 
             if self.draw_debug_aabb:
                 for label, color, rect, obj, priority in self.debug_aabb:
@@ -1241,6 +1250,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                     if not self.cull_via_aabb or visible_rect.colliderect(rect):
                         ctx.aabb(color, rect)
                         ctx.text(label, color, Vector2(rect.topleft))
+
+            ctx.flush()
 
 
 def main():
