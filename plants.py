@@ -1421,6 +1421,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.drawing_minimap = False
 
+        self.tomato_score = 0
+
     def get_zoom_adjustment(self):
         if self.drawing_minimap:
             return 2
@@ -1451,6 +1453,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 if isinstance(obj, IClickReceiver):
                     if obj.clicked():
                         print('click was handled -> breaking out')
+                        if label == "fruit":  # Claus-TBD: if we process that in Branch, how does game know?
+                            self.tomato_score +=1
                         break
 
     def mousemove(self, position: Vector2):
@@ -1565,6 +1569,11 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             if sprite:
                 ctx.sprite(sprite, Vector2(mouse_pos) - Vector2(sprite.img.get_size()) / 2)
             ctx.flush()
+
+            # Claus-NEXT
+            text = f'Tomatoes: {self.tomato_score}'
+            ctx.text(text, Color(0, 255, 255), Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 10))
+
 
 def main():
     #test_matrix3x3()
