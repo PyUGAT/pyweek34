@@ -8,8 +8,8 @@ import array
 import ctypes
 
 from pygame.locals import *
-
 from pygame.math import Vector2
+from pygame.mixer import Sound
 
 from OpenGL.GL import *
 
@@ -195,9 +195,12 @@ class ResourceManager(object):
     def font(self, filename: str, point_size: int):
         return pygame.font.Font(self.dir('font').filename(filename), point_size)
 
+    def sound(self, filename: str):
+        return Sound(self.dir('sound').filename(filename))
 
 class Artwork(object):
     def __init__(self, resources: ResourceManager):
+        # images
         self.tomato = [resources.sprite(filename) for filename in (
             'tomato2-fresh.png',
             'tomato2-yellow.png',
@@ -210,10 +213,15 @@ class Artwork(object):
         self.planet = resources.sprite('mars.png')
         self.spaceship = resources.sprite('spaceship.png')
 
+        # animations (images)
         self.fly_animation = AnimatedSprite([
             resources.sprite('fly1.png'),
             resources.sprite('fly2.png'),
         ], delay_ms=200)
+
+        # sounds
+        self.pick = [resources.sound(f'pick{num}.wav') for num in (1, )]
+
 
     def is_tomato_ripe(self, tomato: Sprite):
         return tomato == self.get_ripe_tomato()
@@ -245,8 +253,14 @@ class Artwork(object):
     def get_fly(self):
         return self.fly_animation
 
+    def get_random_pick_sound(self):
+        return random.choice(self.pick)
+
 
 def aabb_from_points(points: [Vector2]):
+    """
+    Compute axis-aligned bounding box from points.
+    """
     x = min(point.x for point in points)
     y = min(point.y for point in points)
     w = max(point.x for point in points) - x
@@ -256,7 +270,7 @@ def aabb_from_points(points: [Vector2]):
 
 class IDrawTask(object):
     def draw(self):
-        raise NotImplementedError("Do not how to draw this task")
+        raise NotImplementedError("Do not know how to draw this task")
 
 
 class DrawSpriteTask(IDrawTask):
@@ -664,6 +678,7 @@ class Branch(IClickReceiver):
         # TODO: Add score (check fruit_rotten first!)
         if self.has_fruit and self.plant.sector.game.zoom_slider.value >= 95:
             self.has_fruit = False
+            self.plant.artwork.get_random_pick_sound().play()  # Claus-TBD: artwork from plant
             return True
 
         return False
@@ -985,7 +1000,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.rotting_speed = random.uniform(0.01, 0.02)
         self.plants = []
         self.make_new_plants()
-        self.aabb = None
+        self.aabb = None  # axis-aligned bounding box
         self.ripe_fruits = []
 
     def get_center_angle(self):
@@ -1327,6 +1342,7 @@ class Minimap(IClickReceiver):
 class Game(Window, IUpdateReceiver, IMouseReceiver):
     def __init__(self, data_path: str = os.path.join(HERE, 'data')):
         super().__init__('Red Planted')
+        pygame.mixer.init()  # Claus-TBD: here? In tutorials, we often see pygame.init(), which part corresponds to that?
 
         self.resources = ResourceManager(data_path)
         self.artwork = Artwork(self.resources)

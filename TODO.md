@@ -1,7 +1,7 @@
 Add sound effects:
 
  * Cut off plants: https://freesound.org/people/blukotek/sounds/251660/
- * Pluck tomato: https://freesound.org/people/LampEight/sounds/400639/
+ * Pick tomato: https://freesound.org/people/LampEight/sounds/400639/
  * Tomato drops: https://freesound.org/people/aarrnnoo/sounds/516191/
  * Fly sound: https://freesound.org/people/madbaldscotsman/sounds/569161/
  * Fly starting towards tomato: https://freesound.org/people/InspectorJ/sounds/403014/
