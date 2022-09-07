@@ -190,13 +190,14 @@ class ResourceManager(object):
 class Artwork(object):
     def __init__(self, resources: ResourceManager):
         self.tomato = [resources.sprite(filename) for filename in (
-            'tomato-fresh.png',
-            'tomato-yellow.png',
-            'tomato-ripe.png',
-            'tomato-bad.png',
+            'tomato2-fresh.png',
+            'tomato2-yellow.png',
+            'tomato2-ripe.png',
+            'tomato2-bad.png',
         )]
         self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
         self.houses = [resources.sprite(f'house{num}.png') for num in (1, 2, 3, 4)]
+        self.staengel = resources.sprite('staengel.png')
         self.planet = resources.sprite('mars.png')
         self.spaceship = resources.sprite('spaceship.png')
 
@@ -222,6 +223,9 @@ class Artwork(object):
 
     def get_random_house(self):
         return random.choice(self.houses)
+
+    def get_staengel(self):
+        return self.staengel
 
     def get_mars(self):
         return self.planet
@@ -659,7 +663,7 @@ class Branch(IClickReceiver):
         phase = random.uniform(0.1, 0.9)
         if self.depth == 0:
             phase = max(phase, 1.0 - max(0.4, min(0.6, self.plant.fertility)))
-        flength = random.uniform(0.2, 0.3)
+        flength = random.uniform(0.2, 0.3) * 2
         self.children.append(Branch(phase, self.length * flength, 1-2*(len(self.children)%2), self.depth + 1,
                                     plant=self.plant))
 
@@ -968,7 +972,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.number_of_plants = random.choice([2, 3, 5, 6])
         self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants] * 3
         self.fertility = int(random.uniform(10, 70))
-        self.growth_speed = random.uniform(0.02, 0.06)
+        self.growth_speed = random.uniform(0.02, 0.06) * 3
         self.rotting_speed = random.uniform(0.01, 0.02)
         self.plants = []
         self.make_new_plants()
@@ -1338,11 +1342,15 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.num_sectors = 5
         for i in range(self.num_sectors):
-            sector = Sector(self, i, i*360/self.num_sectors)
+            sector = Sector(self, i, i*340/self.num_sectors)
             self.sectors.append(sector)
 
-            coordinate = PlanetSurfaceCoordinates(sector.get_center_angle() + 0.5 * 360 / self.num_sectors)
-            self.houses.append(House(self.planet, coordinate, self.artwork))
+            #coordinate = PlanetSurfaceCoordinates(sector.get_center_angle() + 0.5 * 360 / self.num_sectors)
+            #self.houses.append(House(self.planet, coordinate, self.artwork))
+
+        staengel = House(self.planet, PlanetSurfaceCoordinates(-20), self.artwork)
+        staengel.house = self.artwork.get_staengel()
+        self.houses.append(staengel)
 
         self.spaceship = Spaceship(self, self.planet, self.artwork)
 
