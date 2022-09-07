@@ -1,3 +1,4 @@
+import argparse
 import pygame
 import random
 import time
@@ -22,6 +23,14 @@ RIGHT_MOUSE_BUTTON = 3
  CLICK_PRIORITY_PLANT,
  CLICK_PRIORITY_SECTOR,
  CLICK_PRIORITY_OTHER) = range(4)
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--debug",
+    action="store_true",
+    help="Show debug info",
+)
+args = parser.parse_args()
 
 def multiply_3x3(a, b):
     return array.array('f', (
@@ -1358,7 +1367,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.target_rotate = None
 
         self.debug_aabb = []
-        self.draw_debug_aabb = False
+        self.draw_debug_aabb = args.debug
         self.cull_via_aabb = False
 
         self.drawing_minimap = False
