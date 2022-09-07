@@ -134,7 +134,7 @@ def test_matrix3x3():
             print(f'{v} -> {method}{tuple(args)} -> {m.apply(v)}')
 
 
-class Sprite:
+class SpriteX:
     def __init__(self, img: pygame.surface.Surface, *, want_mipmap: bool):
         self.img = img
         self.width, self.height = self.img.get_size()
@@ -152,8 +152,8 @@ class Sprite:
         return self._texture
 
 
-class AnimatedSprite:
-    def __init__(self, frames: list[Sprite], *, delay_ms: int):
+class AnimatedSpriteX:
+    def __init__(self, frames: list[SpriteX], *, delay_ms: int):
         self.frames = frames
         self.delay_ms = delay_ms
 
@@ -163,7 +163,7 @@ class AnimatedSprite:
 
 
 class Texture:
-    def __init__(self, sprite: Sprite, *, generate_mipmaps: bool):
+    def __init__(self, sprite: SpriteX, *, generate_mipmaps: bool):
         self.id = glGenTextures(1)
 
         glBindTexture(GL_TEXTURE_2D, self.id)
@@ -206,7 +206,7 @@ class ResourceManager:
         return os.path.join(self.root, filename)
 
     def sprite(self, filename: str):
-        return Sprite.load(self.dir('image').filename(filename))
+        return SpriteX.load(self.dir('image').filename(filename))
 
     def font(self, filename: str, point_size: int):
         return pygame.font.Font(self.dir('font').filename(filename), point_size)
@@ -241,7 +241,7 @@ class Artwork:
             self.cursors[mode].width, self.cursors[mode].height = self.cursors[mode].img.get_size()
 
         # animations (images)
-        self.fly_animation = AnimatedSprite([
+        self.fly_animation = AnimatedSpriteX([
             resources.sprite('fly1.png'),
             resources.sprite('fly2.png'),
         ], delay_ms=200)
@@ -249,7 +249,7 @@ class Artwork:
         # sounds
         self.pick = [resources.sound(f'pick{num}.wav') for num in (1, )]
 
-    def is_tomato_ripe(self, tomato: Sprite):
+    def is_tomato_ripe(self, tomato: SpriteX):
         return tomato == self.get_ripe_tomato()
 
     def get_ripe_tomato(self):
@@ -303,7 +303,7 @@ class IDrawTask:
 
 
 class DrawSpriteTask(IDrawTask):
-    def __init__(self, sprite: Sprite):
+    def __init__(self, sprite: SpriteX):
         self.sprite = sprite
         self.data = array.array('f')
 
@@ -432,7 +432,7 @@ class MatrixStack:
 
 
 class FontCacheEntry:
-    def __init__(self, text: str, sprite: Sprite):
+    def __init__(self, text: str, sprite: SpriteX):
         self.generation = -1
         self.text = text
         self.sprite = sprite
@@ -450,7 +450,7 @@ class FontCache:
         key = (text, tuple(color))
 
         if key not in self.cache:
-            sprite = Sprite(self.font.render(text, True, color), want_mipmap=False)
+            sprite = SpriteX(self.font.render(text, True, color), want_mipmap=False)
             self.cache[key] = FontCacheEntry(text, sprite)
 
         entry = self.cache[key]
@@ -544,7 +544,7 @@ class RenderContext:
         glClearColor(*color.normalize())
         glClear(GL_COLOR_BUFFER_BIT)
 
-    def sprite(self, sprite: Sprite, position: Vector2, scale: Vector2 = None, z_layer: int = 0):
+    def sprite(self, sprite: SpriteX, position: Vector2, scale: Vector2 = None, z_layer: int = 0):
         key = (z_layer, sprite)
         if key not in self.queue:
             self.queue[key] = DrawSpriteTask(sprite)
@@ -596,7 +596,7 @@ class RenderContext:
 
         self._colored_vertices(GL_TRIANGLE_STRIP, color, vertices)
 
-    def textured_circle(self, sprite: Sprite, center: Vector2, radius: float):
+    def textured_circle(self, sprite: SpriteX, center: Vector2, radius: float):
         texture = sprite._get_texture()
 
         glBindTexture(GL_TEXTURE_2D, texture.id)
