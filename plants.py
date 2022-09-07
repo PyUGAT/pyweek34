@@ -480,7 +480,7 @@ class RenderContext(object):
         factor = min_zoom + (1.0 - min_zoom) * (1 - (1 - zoom))
 
         self.modelview_matrix_stack.translate(-planet.position.x, -planet.position.y)
-        self.modelview_matrix_stack.translate(0, (zoom**.8) * (planet.radius + self.height / 3))
+        self.modelview_matrix_stack.translate(0, (zoom**.8) * (planet.radius + self.height / 8))
         self.modelview_matrix_stack.scale(factor, factor)
         self.modelview_matrix_stack.rotate(rotate * 2 * math.pi)
 
@@ -783,8 +783,8 @@ class Planet(IDrawable):
     def __init__(self, artwork, renderer):
         self.renderer = renderer
         self.position = Vector2(0, 0)
-        self.radius = 3000
-        self.atmosphere_height = max(500, self.radius * 0.4)
+        self.radius = 500
+        self.atmosphere_height = max(100, self.radius * 0.4)
         self.sprite = artwork.get_mars()
 
     def get_circumfence(self):
@@ -890,9 +890,9 @@ class FruitFly(IUpdateReceiver, IDrawable):
 
 
 class Spaceship(IUpdateReceiver, IDrawable):
-    ELEVATION_BEGIN = 3000
+    ELEVATION_BEGIN = 2000
     #ELEVATION_BEGIN = 600
-    ELEVATION_DOWN = 500
+    ELEVATION_DOWN = 300
 
     def __init__(self, game, planet, artwork):
         self.game = game
@@ -966,7 +966,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.index = index
         self.base_angle = base_angle
         self.number_of_plants = random.choice([2, 3, 5, 6])
-        self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants]
+        self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants] * 3
         self.fertility = int(random.uniform(10, 70))
         self.growth_speed = random.uniform(0.02, 0.06)
         self.rotting_speed = random.uniform(0.01, 0.02)
@@ -1051,7 +1051,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.wind_phase = random.uniform(0, 2*math.pi)
         self.wind_speed = random.uniform(0.9, 1.3)
 
-        length = random.uniform(100, 500)*(0.5+0.5*self.fertility/100)
+        length = random.uniform(100, 500)*(0.5+0.5*self.fertility/100) / 2
 
         self.root = Branch(phase=0, length=length, leftright=+1, depth=0, plant=self)
         self.root.grow()
@@ -1336,12 +1336,12 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.minimap = Minimap(self)
 
-        self.num_sectors = 8
+        self.num_sectors = 5
         for i in range(self.num_sectors):
             sector = Sector(self, i, i*360/self.num_sectors)
             self.sectors.append(sector)
 
-            coordinate = PlanetSurfaceCoordinates(sector.base_angle + 0.5 * 360 / self.num_sectors)
+            coordinate = PlanetSurfaceCoordinates(sector.get_center_angle() + 0.5 * 360 / self.num_sectors)
             self.houses.append(House(self.planet, coordinate, self.artwork))
 
         self.spaceship = Spaceship(self, self.planet, self.artwork)
@@ -1357,9 +1357,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
     def get_zoom_adjustment(self):
         if self.drawing_minimap:
-            return 8
+            return 2
 
-        return 2 * (100-self.zoom_slider.value)/100
+        return 0
+        #return 2 * (100-self.zoom_slider.value)/100
 
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
