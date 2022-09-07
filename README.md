@@ -13,6 +13,10 @@ To play, install the requirements as outlined below and run
 python run_game.py
 ```
 
+If you get a libGL error and use conda for package management,
+you can solve it within your environment by `conda install -c conda-forge libstdcxx-ng`.
+
+
 ## Setup & Development
 
 Using your favorite tool to create an environment, do something
