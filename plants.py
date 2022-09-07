@@ -188,6 +188,7 @@ class Artwork(object):
         self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
         self.houses = [resources.sprite(f'house{num}.png') for num in (1, 2, 3, 4)]
         self.planet = resources.sprite('mars.png')
+        self.spaceship = resources.sprite('spaceship.png')
 
     def is_tomato_ripe(self, tomato: Sprite):
         return tomato == self.tomato[-2]
@@ -206,6 +207,9 @@ class Artwork(object):
 
     def get_mars(self):
         return self.planet
+
+    def get_spaceship(self):
+        return self.spaceship
 
 
 def aabb_from_points(points: [Vector2]):
@@ -694,9 +698,9 @@ class Branch(IClickReceiver):
         if self.plant.need_aabb:
             self.plant.aabb_points.extend((ctx.transform_to_screenspace(pos), ctx.transform_to_screenspace(to_point)))
 
-        zoom_adj = (100-self.plant.sector.game.zoom_slider.value)/100
+        zoom_adj = self.plant.sector.game.get_zoom_adjustment()
 
-        ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100 + 30 * zoom_adj, z_layer=ctx.LAYER_BRANCHES)
+        ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100 + 15 * zoom_adj, z_layer=ctx.LAYER_BRANCHES)
 
         for child in self.children:
             child_factor = max(0, (factor - child.phase) / (1 - child.phase))
@@ -704,7 +708,7 @@ class Branch(IClickReceiver):
 
         if not self.children and self.has_fruit:
             if self.plant.growth > self.random_fruit_appearance_value:
-                ff = factor + 2 * zoom_adj
+                ff = factor + zoom_adj
                 tomato = self.plant.artwork.get_tomato_sprite(factor, self.fruit_rotten)
                 topleft = to_point + Vector2(-(tomato.width*ff)/2, 0)
                 ctx.sprite(tomato, topleft, scale=ff, z_layer=ctx.LAYER_FRONT)
@@ -728,8 +732,13 @@ class Branch(IClickReceiver):
 
 
 class PlanetSurfaceCoordinates(object):
-    def __init__(self, angle_degrees: float):
+    def __init__(self, angle_degrees: float, elevation: float = 0):
         self.angle_degrees = angle_degrees
+        self.elevation = elevation
+
+    def lerp(self, *, target, alpha: float):
+        return PlanetSurfaceCoordinates((1 - alpha) * self.angle_degrees + alpha * target.angle_degrees,
+                                        (1 - alpha) * self.elevation + alpha * target.elevation)
 
 
 class Planet(IDrawable):
@@ -737,7 +746,7 @@ class Planet(IDrawable):
         self.renderer = renderer
         self.position = Vector2(0, 0)
         self.radius = 3000
-        self.atmosphere_height = max(500, self.radius * 0.2)
+        self.atmosphere_height = max(500, self.radius * 0.4)
         self.sprite = artwork.get_mars()
 
     def get_circumfence(self):
@@ -747,11 +756,45 @@ class Planet(IDrawable):
         ctx.textured_circle(self.sprite, self.position, self.radius)
 
     def at(self, position: PlanetSurfaceCoordinates):
-        return self.position + Vector2(0, -self.radius).rotate(position.angle_degrees)
+        return self.position + Vector2(0, -(self.radius + position.elevation)).rotate(position.angle_degrees)
 
     def apply_planet_surface_transform(self, position: PlanetSurfaceCoordinates):
         self.renderer.modelview_matrix_stack.translate(*self.at(position))
         self.renderer.modelview_matrix_stack.rotate(position.angle_degrees * math.pi / 180)
+
+
+class Spaceship(IUpdateReceiver, IDrawable):
+    ELEVATION_BEGIN = 3000
+    ELEVATION_DOWN = 500
+
+    def __init__(self, game, planet, artwork):
+        self.game = game
+        self.planet = planet
+        self.sprite = artwork.get_spaceship()
+        self.target_sector = random.choice(self.game.sectors)
+        self.coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_BEGIN)
+        self.target_coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_DOWN)
+        self.ticks = 0
+
+    def update(self):
+        self.ticks += 1
+
+        if self.ticks % 1000 == 0:
+            # pick another sector
+            self.target_sector = random.choice(self.game.sectors)
+
+        now = self.game.renderer.now
+        self.target_coordinates.angle_degrees = self.target_sector.get_center_angle() + 10 * math.sin(now/10)
+        self.target_coordinates.elevation = self.ELEVATION_DOWN + 30 * math.cos(now)
+        self.coordinates = self.coordinates.lerp(target=self.target_coordinates, alpha=0.01)
+
+    def draw(self, ctx):
+        scale_up = 1 + self.game.get_zoom_adjustment()
+
+        ctx.modelview_matrix_stack.push()
+        self.planet.apply_planet_surface_transform(self.coordinates)
+        ctx.sprite(self.sprite, -Vector2(self.sprite.width, self.sprite.height) / 2 * scale_up, scale_up)
+        ctx.modelview_matrix_stack.pop()
 
 
 class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
@@ -768,11 +811,14 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.make_new_plants()
         self.aabb = None
 
+    def get_center_angle(self):
+        return (self.base_angle + self.sector_width_degrees / 2)
+
     def clicked(self):
         print(f"ouch, i'm a sector! {self.index}")
         if self.game.zoom_slider.value < 50:
             print('zooming into sector')
-            self.game.target_rotate = 360-(self.base_angle + self.sector_width_degrees / 2)
+            self.game.target_rotate = 360-self.get_center_angle()
             self.game.target_zoom = 100
             return True
 
@@ -1127,12 +1173,22 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             coordinate = PlanetSurfaceCoordinates(sector.base_angle + 0.5 * 360 / self.num_sectors)
             self.houses.append(House(self.planet, coordinate, self.artwork))
 
+        self.spaceship = Spaceship(self, self.planet, self.artwork)
+
         self.target_zoom = None
         self.target_rotate = None
 
         self.debug_aabb = []
         self.draw_debug_aabb = True
         self.cull_via_aabb = True
+
+        self.drawing_minimap = False
+
+    def get_zoom_adjustment(self):
+        if self.drawing_minimap:
+            return 8
+
+        return 2 * (100-self.zoom_slider.value)/100
 
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
@@ -1190,9 +1246,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             else:
                 self.zoom_slider.value = alpha * self.target_zoom + (1 - alpha) * self.zoom_slider.value
 
-
         for sector in self.sectors:
             sector.update()
+
+        self.spaceship.update()
 
     def draw_scene(self, ctx, *, bg_color: Color, details: bool, visible_rect: Rect):
         ctx.clear(bg_color)
@@ -1204,6 +1261,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         for house in self.houses:
             house.draw(ctx)
+
+        self.spaceship.draw(ctx)
 
         self.planet.draw(ctx)
 
@@ -1232,8 +1291,11 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             self.debug_aabb.append(('minimap', Color(0, 255, 255), self.minimap.rect, self.minimap, CLICK_PRIORITY_OTHER))
 
             ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 360)
+
             # TODO: Draw stylized scene
+            self.drawing_minimap = True
             self.draw_scene(ctx, bg_color=Color(10, 10, 10), details=False, visible_rect=visible_rect)
+            self.drawing_minimap = False
 
             glDisable(GL_SCISSOR_TEST)
             glViewport(0, 0, self.width, self.height)
