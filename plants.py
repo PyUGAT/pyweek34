@@ -556,8 +556,6 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
     def update(self):
         for plant in self.plants:
-            #plant.health = self.game.health_slider.value
-            #plant.growth = self.game.growth_slider.value
             plant.update()
 
     def draw(self, ctx):
@@ -887,17 +885,11 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.sectors = []
         self.houses = []
 
-        self.health_slider = Slider('health', 0, 100, 100)
-        self.growth_slider = Slider('growth', 0, 100, 100)
-        self.fertility_slider = Slider('fertility', 0, 100, 100, self.make_new_plants)
         self.zoom_slider = Slider('zoom', 0, 100, 100)
         self.rotate_slider = Slider('rotate', 0, 360, 0)
 
         self.gui = DebugGUI(self, [
             VBox([
-                self.health_slider,
-                self.growth_slider,
-                self.fertility_slider,
                 self.zoom_slider,
                 self.rotate_slider,
             ])
