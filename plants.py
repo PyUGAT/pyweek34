@@ -24,6 +24,11 @@ RIGHT_MOUSE_BUTTON = 3
  CLICK_PRIORITY_SECTOR,
  CLICK_PRIORITY_OTHER) = range(4)
 
+LABEL_FRUIT = "fruit"
+LABEL_MINIMAP = "minimap"
+LABEL_PLANT = "plant"
+LABEL_SECTOR = "sector"
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--debug",
@@ -130,7 +135,7 @@ def test_matrix3x3():
 
 
 class Sprite:
-    def __init__(self, img, *, want_mipmap: bool):
+    def __init__(self, img: pygame.surface.Surface, *, want_mipmap: bool):
         self.img = img
         self.width, self.height = self.img.get_size()
         self.want_mipmap = want_mipmap
@@ -148,7 +153,7 @@ class Sprite:
 
 
 class AnimatedSprite:
-    def __init__(self, frames: [Sprite], *, delay_ms: int):
+    def __init__(self, frames: list[Sprite], *, delay_ms: int):
         self.frames = frames
         self.delay_ms = delay_ms
 
@@ -185,6 +190,11 @@ class Texture:
         glDeleteTextures([self.id])
 
 
+# class CustomCursor:
+#     def show(self, type):
+#         pass
+
+
 class ResourceManager:
     def __init__(self, root):
         self.root = root
@@ -219,6 +229,17 @@ class Artwork:
         self.planet = resources.sprite('mars.png')
         self.spaceship = resources.sprite('spaceship.png')
 
+        # TODO: Use animated cursors
+        self.cursors = {
+            # None: ...,  # in case we also want a custom cursor if not on object
+            "cut": resources.sprite('cursor_cut.png'),
+            "harvest": resources.sprite('cursor_harvest.png'),
+        }
+        for mode, sprite in self.cursors.items():
+            # TODO: Make cursor size dynamic??
+            self.cursors[mode].img = pygame.transform.scale(sprite.img, Vector2(40, 40))
+            self.cursors[mode].width, self.cursors[mode].height = self.cursors[mode].img.get_size()
+
         # animations (images)
         self.fly_animation = AnimatedSprite([
             resources.sprite('fly1.png'),
@@ -227,7 +248,6 @@ class Artwork:
 
         # sounds
         self.pick = [resources.sound(f'pick{num}.wav') for num in (1, )]
-
 
     def is_tomato_ripe(self, tomato: Sprite):
         return tomato == self.get_ripe_tomato()
@@ -258,6 +278,9 @@ class Artwork:
 
     def get_fly(self):
         return self.fly_animation
+
+    def get_cursor(self, mode: str | None):
+        return self.cursors.get(mode, None)
 
     def get_random_pick_sound(self):
         return random.choice(self.pick)
@@ -657,6 +680,8 @@ class IDrawable:
 
 
 class Branch(IClickReceiver):
+    CURSOR = "harvest"
+
     def __init__(self, phase, length, leftright, depth, plant):
         self.plant = plant
         self.phase = phase
@@ -788,7 +813,7 @@ class Branch(IClickReceiver):
 
                     # insert front, so that the layer ordering/event handling works correctly
                     game = self.plant.sector.game
-                    game.debug_aabb.insert(0, ('fruit', Color(255, 255, 255), aabb, self, CLICK_PRIORITY_FRUIT))
+                    game.debug_aabb.insert(0, (LABEL_FRUIT, Color(255, 255, 255), aabb, self, CLICK_PRIORITY_FRUIT))
 
                     ctx.modelview_matrix_stack.push()
                     ctx.modelview_matrix_stack.identity()
@@ -1054,18 +1079,19 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         for plant in self.plants:
             plant.draw(ctx)
             if plant.aabb is not None:
-                self.game.debug_aabb.append(('plant', Color(0, 128, 128), plant.aabb, plant, CLICK_PRIORITY_PLANT))
+                self.game.debug_aabb.append((LABEL_PLANT, Color(0, 128, 128), plant.aabb, plant, CLICK_PRIORITY_PLANT))
                 if self.aabb is None:
                     self.aabb = Rect(plant.aabb)
                 else:
                     self.aabb = self.aabb.union(plant.aabb)
 
         if self.aabb is not None:
-            self.game.debug_aabb.append((f'sector {self.index}', Color(128, 255, 128), self.aabb, self, CLICK_PRIORITY_SECTOR))
+            self.game.debug_aabb.append((f'{LABEL_SECTOR} {self.index}', Color(128, 255, 128), self.aabb, self, CLICK_PRIORITY_SECTOR))
 
 
 class Plant(IUpdateReceiver, IClickReceiver):
     AABB_PADDING_PX = 20
+    CURSOR = "cut"
 
     def __init__(self, sector: Sector, planet: Planet, position: PlanetSurfaceCoordinates, fertility, artwork: Artwork):
         super().__init__()
@@ -1500,7 +1526,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             glScissor(*minimap_gl_rect)
             glEnable(GL_SCISSOR_TEST)
 
-            self.debug_aabb.append(('minimap', Color(0, 255, 255), self.minimap.rect, self.minimap, CLICK_PRIORITY_OTHER))
+            self.debug_aabb.append((LABEL_MINIMAP, Color(0, 255, 255), self.minimap.rect, self.minimap, CLICK_PRIORITY_OTHER))
 
             ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 360)
 
@@ -1527,6 +1553,18 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
             ctx.flush()
 
+            # Update the cursor dependent on what is below
+            mouse_pos = pygame.mouse.get_pos()
+            cursor_mode = None
+            for label, color, rect, obj, priority in sorted(self.debug_aabb, key=lambda t: t[-1]):
+                if rect.collidepoint(mouse_pos):
+                    cursor_mode = getattr(obj, "CURSOR", None)
+                    break
+            sprite = self.artwork.get_cursor(cursor_mode)
+            pygame.mouse.set_visible(not bool(sprite))
+            if sprite:
+                ctx.sprite(sprite, Vector2(mouse_pos) - Vector2(sprite.img.get_size()) / 2)
+            ctx.flush()
 
 def main():
     #test_matrix3x3()

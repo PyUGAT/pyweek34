@@ -1,0 +1,2 @@
+- `MultiTouch-Interface-Pixel-theme-Hand-Open.zip` from https://publicdomainvectors.org/en/free-clipart/MultiTouch-Interface-Pixel-theme-Hand-Open/89887.html
+- `cursor_cut.png` from https://pixelworlds.fandom.com/wiki/Sickle?file=Sickle.png
