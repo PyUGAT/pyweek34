@@ -137,10 +137,9 @@ class RenderContext(object):
     Z_BACK = 1
     Z_FRONT = 99
 
-    def __init__(self, width, height, win, resources: ResourceManager):
+    def __init__(self, width, height, resources: ResourceManager):
         self.width = width
         self.height = height
-        self.win = win
         self.font = resources.font('RobotoMono-SemiBold.ttf', 16)
         self.queue = []
         self.started = time.time()
@@ -757,7 +756,7 @@ class Slider(Widget):
         fraction = (self.value - self.min) / (self.max - self.min)
         radius = self.rect.height / 2
         center = self.rect.topleft + Vector2(radius + (self.rect.width - 2 * radius) * fraction, self.rect.height / 2)
-        ctx.circle(Color(200, 200, 255), center, radius)
+        ctx.rect(Color(200, 200, 255), Rect(center.x - radius, center.y - radius, 2 * radius, 2 * radius))
         ctx.text(f'{self.label}: {self.value:.0f}', Color(255, 255, 255), Vector2(self.rect.topleft))
 
     def mousedown(self, pos):
@@ -881,7 +880,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.resources = ResourceManager(data_path)
         self.artwork = Artwork(self.resources)
-        self.renderer = RenderContext(self.width, self.height, self.screen, self.resources)
+        self.renderer = RenderContext(self.width, self.height, self.resources)
 
         self.planet = Planet(self.artwork)
 
