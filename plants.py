@@ -53,7 +53,7 @@ def multiply_3x3(a, b):
         a[6]*b[2] + a[7]*b[5] + a[8]*b[8],
     ))
 
-class Matrix3x3(object):
+class Matrix3x3:
     def __init__(self, initial=None):
         self.m = array.array('f', initial.m if initial is not None else (
             1., 0., 0.,
@@ -129,7 +129,7 @@ def test_matrix3x3():
             print(f'{v} -> {method}{tuple(args)} -> {m.apply(v)}')
 
 
-class Sprite(object):
+class Sprite:
     def __init__(self, img, *, want_mipmap: bool):
         self.img = img
         self.width, self.height = self.img.get_size()
@@ -147,7 +147,7 @@ class Sprite(object):
         return self._texture
 
 
-class AnimatedSprite(object):
+class AnimatedSprite:
     def __init__(self, frames: [Sprite], *, delay_ms: int):
         self.frames = frames
         self.delay_ms = delay_ms
@@ -157,7 +157,7 @@ class AnimatedSprite(object):
         return self.frames[pos % len(self.frames)]
 
 
-class Texture(object):
+class Texture:
     def __init__(self, sprite: Sprite, *, generate_mipmaps: bool):
         self.id = glGenTextures(1)
 
@@ -185,7 +185,7 @@ class Texture(object):
         glDeleteTextures([self.id])
 
 
-class ResourceManager(object):
+class ResourceManager:
     def __init__(self, root):
         self.root = root
 
@@ -204,7 +204,7 @@ class ResourceManager(object):
     def sound(self, filename: str):
         return Sound(self.dir('sound').filename(filename))
 
-class Artwork(object):
+class Artwork:
     def __init__(self, resources: ResourceManager):
         # images
         self.tomato = [resources.sprite(filename) for filename in (
@@ -274,7 +274,7 @@ def aabb_from_points(points: [Vector2]):
     return Rect(x, y, w, h)
 
 
-class IDrawTask(object):
+class IDrawTask:
     def draw(self):
         raise NotImplementedError("Do not know how to draw this task")
 
@@ -379,7 +379,7 @@ class DrawColoredVerticesTask(IDrawTask):
         glDeleteBuffers(1, [buf])
 
 
-class MatrixStack(object):
+class MatrixStack:
     def __init__(self):
         self.stack = [Matrix3x3()]
 
@@ -408,14 +408,14 @@ class MatrixStack(object):
         return Vector2(self.stack[-1].apply(v))
 
 
-class FontCacheEntry(object):
+class FontCacheEntry:
     def __init__(self, text: str, sprite: Sprite):
         self.generation = -1
         self.text = text
         self.sprite = sprite
 
 
-class FontCache(object):
+class FontCache:
     EXPIRE_GENERATIONS = 20
 
     def __init__(self, font):
@@ -446,7 +446,7 @@ class FontCache(object):
             del self.cache[key]
 
 
-class RenderContext(object):
+class RenderContext:
     LAYER_BRANCHES = 60
     LAYER_LEAVES = 70
     LAYER_FRUIT = 80
@@ -626,13 +626,13 @@ class RenderContext(object):
         self.queue = {}
 
 
-class IClickReceiver(object):
+class IClickReceiver:
     def clicked(self):
         # Return true to prevent propagation of event
         return False
 
 
-class IMouseReceiver(object):
+class IMouseReceiver:
     def mousedown(self, position: Vector2):
         ...
 
@@ -646,12 +646,12 @@ class IMouseReceiver(object):
         ...
 
 
-class IUpdateReceiver(object):
+class IUpdateReceiver:
     def update(self):
         raise NotImplementedError("Update not implemented")
 
 
-class IDrawable(object):
+class IDrawable:
     def draw(self, ctx: RenderContext):
         raise NotImplementedError("Draw not implemented")
 
@@ -803,7 +803,7 @@ class Branch(IClickReceiver):
                 ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=Vector2(ff, ff), z_layer=ctx.LAYER_LEAVES)
 
 
-class PlanetSurfaceCoordinates(object):
+class PlanetSurfaceCoordinates:
     def __init__(self, angle_degrees: float, elevation: float = 0):
         self.angle_degrees = angle_degrees
         self.elevation = elevation
@@ -1288,7 +1288,7 @@ class DebugGUI(Container):
         self.wheel_sum.y += y
 
 
-class Window(object):
+class Window:
     EVENT_TYPE_UPDATE = pygame.USEREVENT + 42
 
     def __init__(self, title: str, width: int = 1280, height: int = 720, updates_per_second: int = 60):
