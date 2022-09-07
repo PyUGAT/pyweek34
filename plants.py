@@ -802,8 +802,8 @@ class Planet(IDrawable):
 
 
 class FruitFly(IUpdateReceiver, IDrawable):
-    FLYING_SPEED_CARRYING = 2
-    FLYING_SPEED_NON_CARRYING = 4
+    FLYING_SPEED_CARRYING = 1
+    FLYING_SPEED_NON_CARRYING = 3
 
     def __init__(self, game, spaceship, artwork, phase):
         self.game = game
@@ -1063,7 +1063,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
 
     def clicked(self):
         # TODO: Replant? / FIXME: only when zoomed in
-        if self.sector.game.zoom_slider.value == 100:
+        if self.sector.game.zoom_slider.value > 95:
             self.sector.replant(self)
             return True
         else:
