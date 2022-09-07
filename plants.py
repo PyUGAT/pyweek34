@@ -132,6 +132,16 @@ class Sprite(object):
         return self._texture
 
 
+class AnimatedSprite(object):
+    def __init__(self, frames: [Sprite], *, delay_ms: int):
+        self.frames = frames
+        self.delay_ms = delay_ms
+
+    def get(self, ctx):
+        pos = int((ctx.now * 1000) / self.delay_ms)
+        return self.frames[pos % len(self.frames)]
+
+
 class Texture(object):
     def __init__(self, sprite: Sprite, *, generate_mipmaps: bool):
         self.id = glGenTextures(1)
@@ -190,8 +200,16 @@ class Artwork(object):
         self.planet = resources.sprite('mars.png')
         self.spaceship = resources.sprite('spaceship.png')
 
+        self.fly_animation = AnimatedSprite([
+            resources.sprite('fly1.png'),
+            resources.sprite('fly2.png'),
+        ], delay_ms=200)
+
     def is_tomato_ripe(self, tomato: Sprite):
-        return tomato == self.tomato[-2]
+        return tomato == self.get_ripe_tomato()
+
+    def get_ripe_tomato(self):
+        return self.tomato[-2]
 
     def get_tomato_sprite(self, factor: float, rotten: bool):
         if rotten:
@@ -210,6 +228,9 @@ class Artwork(object):
 
     def get_spaceship(self):
         return self.spaceship
+
+    def get_fly(self):
+        return self.fly_animation
 
 
 def aabb_from_points(points: [Vector2]):
@@ -230,9 +251,12 @@ class DrawSpriteTask(IDrawTask):
         self.sprite = sprite
         self.data = array.array('f')
 
-    def append(self, position: Vector2, scale: float, apply_modelview_matrix):
-        right = Vector2(self.sprite.width * scale, 0)
-        bottom = Vector2(0, self.sprite.height * scale)
+    def append(self, position: Vector2, scale: Vector2, apply_modelview_matrix):
+        if scale is None:
+            scale = Vector2(1, 1)
+
+        right = Vector2(self.sprite.width * scale.x, 0)
+        bottom = Vector2(0, self.sprite.height * scale.y)
 
         tl = Vector2(position)
         tr = tl + right
@@ -392,7 +416,8 @@ class FontCache(object):
 class RenderContext(object):
     LAYER_BRANCHES = 60
     LAYER_LEAVES = 70
-    LAYER_FRONT = 99
+    LAYER_FRUIT = 80
+    LAYER_FLIES = 90
 
     def __init__(self, width, height, resources: ResourceManager):
         self.width = width
@@ -463,7 +488,7 @@ class RenderContext(object):
         glClearColor(*color.normalize())
         glClear(GL_COLOR_BUFFER_BIT)
 
-    def sprite(self, sprite: Sprite, position: Vector2, scale: float = 1, z_layer: int = 0):
+    def sprite(self, sprite: Sprite, position: Vector2, scale: Vector2 = None, z_layer: int = 0):
         key = (z_layer, sprite)
         if key not in self.queue:
             self.queue[key] = DrawSpriteTask(sprite)
@@ -617,6 +642,10 @@ class Branch(IClickReceiver):
         self.leaf = plant.artwork.get_random_leaf()
         self.random_leaf_appearance_value = random.uniform(20, 70)
         self.random_fruit_appearance_value = random.uniform(40, 70)
+        self.fruit_world_position = Vector2(0, 0)
+
+    def get_world_position(self):
+        return self.fruit_world_position
 
     def clicked(self):
         # TODO: Add score (check fruit_rotten first!)
@@ -711,7 +740,7 @@ class Branch(IClickReceiver):
                 ff = factor + zoom_adj
                 tomato = self.plant.artwork.get_tomato_sprite(factor, self.fruit_rotten)
                 topleft = to_point + Vector2(-(tomato.width*ff)/2, 0)
-                ctx.sprite(tomato, topleft, scale=ff, z_layer=ctx.LAYER_FRONT)
+                ctx.sprite(tomato, topleft, scale=Vector2(ff, ff), z_layer=ctx.LAYER_FRUIT)
 
                 # You can only click on ripe tomatoes
                 if self.plant.artwork.is_tomato_ripe(tomato):
@@ -722,13 +751,22 @@ class Branch(IClickReceiver):
                         ctx.transform_to_screenspace(topleft + Vector2(ff * tomato.width, ff * tomato.height)),
                     ])
 
+
                     # insert front, so that the layer ordering/event handling works correctly
                     game = self.plant.sector.game
                     game.debug_aabb.insert(0, ('fruit', Color(255, 255, 255), aabb, self, CLICK_PRIORITY_FRUIT))
+
+                    ctx.modelview_matrix_stack.push()
+                    ctx.modelview_matrix_stack.identity()
+                    game.planet.apply_planet_surface_transform(self.plant.position)
+                    self.fruit_world_position = ctx.modelview_matrix_stack.apply(topleft + Vector2(tomato.width, tomato.height)/2)
+                    ctx.modelview_matrix_stack.pop()
+
+                    self.plant.sector.ripe_fruits.append(self)
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
                 ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
-                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_layer=ctx.LAYER_LEAVES)
+                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=Vector2(ff, ff), z_layer=ctx.LAYER_LEAVES)
 
 
 class PlanetSurfaceCoordinates(object):
@@ -763,38 +801,107 @@ class Planet(IDrawable):
         self.renderer.modelview_matrix_stack.rotate(position.angle_degrees * math.pi / 180)
 
 
+class FruitFly(IUpdateReceiver, IDrawable):
+    def __init__(self, game, spaceship, artwork, phase):
+        self.game = game
+        self.spaceship = spaceship
+        self.artwork = artwork
+        self.phase = phase
+        self.sprite_animation = artwork.get_fly()
+        self.roaming_target = self.spaceship
+        self.roaming_offset = Vector2(0, 0)
+        self.x_direction = 1
+        self.carrying_fruit = False
+
+    def get_world_position(self):
+        return self.roaming_target.get_world_position() + self.roaming_offset
+
+    def update(self):
+        now = self.game.renderer.now
+        angle = now * 1.1 + self.phase * 2 * math.pi
+
+        # TODO: Don't snap to the new target, but set it and then fly to it
+        if self.spaceship.target_sector.ripe_fruits:
+            self.roaming_target = self.spaceship.target_sector.ripe_fruits[0]
+        else:
+            self.roaming_target = self.spaceship
+
+        new_roaming_offset = Vector2(self.spaceship.sprite.width / 2 * math.sin(angle),
+                                     self.spaceship.sprite.height / 2 * math.cos(angle))
+        self.x_direction = -1 if new_roaming_offset.x < self.roaming_offset.x else +1
+        self.roaming_offset = new_roaming_offset
+
+    def draw_fly_at(self, ctx, pos, direction, scale_up):
+        fly_sprite = self.sprite_animation.get(ctx)
+        fly_offset = -Vector2(fly_sprite.width, fly_sprite.height) / 2
+        fly_offset.x *= direction
+        ctx.sprite(fly_sprite, pos + fly_offset * scale_up, scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FLIES)
+
+        if self.carrying_fruit:
+            fly_offset += Vector2(0, fly_sprite.height/2)
+            ctx.sprite(self.artwork.get_ripe_tomato(), pos + fly_offset * scale_up,
+                       scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FRUIT)
+
+    def draw(self, ctx):
+        scale_up = 1 + self.game.get_zoom_adjustment()
+
+        self.draw_fly_at(ctx, self.get_world_position(), self.x_direction, scale_up)
+
+
 class Spaceship(IUpdateReceiver, IDrawable):
-    ELEVATION_BEGIN = 3000
+    #ELEVATION_BEGIN = 3000
+    ELEVATION_BEGIN = 600
     ELEVATION_DOWN = 500
 
     def __init__(self, game, planet, artwork):
         self.game = game
         self.planet = planet
         self.sprite = artwork.get_spaceship()
-        self.target_sector = random.choice(self.game.sectors)
+        self.target_sector = self.pick_target_sector()
         self.coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_BEGIN)
         self.target_coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_DOWN)
         self.ticks = 0
+        self.flies = []
+
+        num_flies = 5
+        for i in range(num_flies):
+            self.flies.append(FruitFly(game, self, artwork, i / num_flies))
+
+    def pick_target_sector(self):
+        # for debugging
+        return self.game.sectors[0]
+        #return random.choice(self.game.sectors)
+
+    def get_world_position(self):
+        return self.planet.at(self.coordinates)
 
     def update(self):
         self.ticks += 1
 
         if self.ticks % 1000 == 0:
             # pick another sector
-            self.target_sector = random.choice(self.game.sectors)
+            self.target_sector = self.pick_target_sector()
 
         now = self.game.renderer.now
         self.target_coordinates.angle_degrees = self.target_sector.get_center_angle() + 10 * math.sin(now/10)
         self.target_coordinates.elevation = self.ELEVATION_DOWN + 30 * math.cos(now)
         self.coordinates = self.coordinates.lerp(target=self.target_coordinates, alpha=0.01)
 
+        for fly in self.flies:
+            fly.update()
+
     def draw(self, ctx):
         scale_up = 1 + self.game.get_zoom_adjustment()
 
         ctx.modelview_matrix_stack.push()
         self.planet.apply_planet_surface_transform(self.coordinates)
-        ctx.sprite(self.sprite, -Vector2(self.sprite.width, self.sprite.height) / 2 * scale_up, scale_up)
+        ctx.sprite(self.sprite, -Vector2(self.sprite.width, self.sprite.height) / 2 * scale_up, Vector2(scale_up, scale_up))
+
         ctx.modelview_matrix_stack.pop()
+
+        for fly in self.flies:
+            fly.draw(ctx)
+
 
 
 class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
@@ -810,6 +917,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.plants = []
         self.make_new_plants()
         self.aabb = None
+        self.ripe_fruits = []
 
     def get_center_angle(self):
         return (self.base_angle + self.sector_width_degrees / 2)
@@ -846,6 +954,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
     def draw(self, ctx):
         self.aabb = None
+        self.ripe_fruits = []
 
         for plant in self.plants:
             plant.draw(ctx)
@@ -875,7 +984,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.aabb_points = []
         self.aabb = None
 
-        self.growth = 0
+        self.growth = 100
         self.health = 100
         self.fertility = fertility
 
