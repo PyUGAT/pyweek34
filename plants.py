@@ -1573,7 +1573,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             # Claus-NEXT
             text = f'Tomatoes: {self.tomato_score}'
             ctx.text(text, Color(0, 255, 255), Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 10))
-
+            ctx.flush()
 
 def main():
     #test_matrix3x3()
