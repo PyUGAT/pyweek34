@@ -802,6 +802,9 @@ class Planet(IDrawable):
 
 
 class FruitFly(IUpdateReceiver, IDrawable):
+    FLYING_SPEED_CARRYING = 2
+    FLYING_SPEED_NON_CARRYING = 4
+
     def __init__(self, game, spaceship, artwork, phase):
         self.game = game
         self.spaceship = spaceship
@@ -811,23 +814,59 @@ class FruitFly(IUpdateReceiver, IDrawable):
         self.roaming_target = self.spaceship
         self.roaming_offset = Vector2(0, 0)
         self.x_direction = 1
+        self.returning_to_spaceship = False
         self.carrying_fruit = False
 
     def get_world_position(self):
         return self.roaming_target.get_world_position() + self.roaming_offset
 
+    def reparent_to(self, new_target):
+        here = self.get_world_position()
+        self.roaming_offset = here - new_target.get_world_position()
+        self.roaming_target = new_target
+
+    def fly_towards_target(self, step):
+        if self.roaming_offset.length() > 0:
+            new_length = max(0, self.roaming_offset.length() - step)
+            new_roaming_offset = self.roaming_offset.normalize() * new_length
+            return new_roaming_offset, False
+        else:
+            return self.roaming_offset, True
+
     def update(self):
         now = self.game.renderer.now
         angle = now * 1.1 + self.phase * 2 * math.pi
 
-        # TODO: Don't snap to the new target, but set it and then fly to it
-        if self.spaceship.target_sector.ripe_fruits:
-            self.roaming_target = self.spaceship.target_sector.ripe_fruits[0]
+        if self.returning_to_spaceship:
+            self.reparent_to(self.spaceship)
+            new_roaming_offset, did_arrive = self.fly_towards_target(self.FLYING_SPEED_CARRYING
+                    if self.carrying_fruit else self.FLYING_SPEED_NON_CARRYING)
+            if did_arrive:
+                # ka'ching!
+                self.carrying_fruit = False
+                self.returning_to_spaceship = False
         else:
-            self.roaming_target = self.spaceship
+            if self.roaming_target != self.spaceship:
+                fruit = self.roaming_target
+            else:
+                fruit = self.spaceship.get_available_fruit()
 
-        new_roaming_offset = Vector2(self.spaceship.sprite.width / 2 * math.sin(angle),
-                                     self.spaceship.sprite.height / 2 * math.cos(angle))
+            if self.spaceship.near_target_sector and fruit is not None:
+                if not fruit.has_fruit or fruit.plant.was_deleted:
+                    # Return to space ship, as there's nothing to grab here
+                    self.returning_to_spaceship = True
+
+                self.reparent_to(fruit)
+                new_roaming_offset, did_arrive = self.fly_towards_target(self.FLYING_SPEED_NON_CARRYING)
+                if did_arrive:
+                    self.carrying_fruit = fruit.has_fruit and not fruit.plant.was_deleted
+                    fruit.has_fruit = False
+                    self.returning_to_spaceship = True
+            else:
+                self.roaming_target = self.spaceship
+                new_roaming_offset = Vector2(self.spaceship.sprite.width / 2 * math.sin(angle),
+                                             self.spaceship.sprite.height / 2 * math.cos(angle))
+
         self.x_direction = -1 if new_roaming_offset.x < self.roaming_offset.x else +1
         self.roaming_offset = new_roaming_offset
 
@@ -835,6 +874,8 @@ class FruitFly(IUpdateReceiver, IDrawable):
         fly_sprite = self.sprite_animation.get(ctx)
         fly_offset = -Vector2(fly_sprite.width, fly_sprite.height) / 2
         fly_offset.x *= direction
+
+        # FIXME: Rotation is all off, should use the current sector's modelview
         ctx.sprite(fly_sprite, pos + fly_offset * scale_up, scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FLIES)
 
         if self.carrying_fruit:
@@ -849,8 +890,8 @@ class FruitFly(IUpdateReceiver, IDrawable):
 
 
 class Spaceship(IUpdateReceiver, IDrawable):
-    #ELEVATION_BEGIN = 3000
-    ELEVATION_BEGIN = 600
+    ELEVATION_BEGIN = 3000
+    #ELEVATION_BEGIN = 600
     ELEVATION_DOWN = 500
 
     def __init__(self, game, planet, artwork):
@@ -858,19 +899,31 @@ class Spaceship(IUpdateReceiver, IDrawable):
         self.planet = planet
         self.sprite = artwork.get_spaceship()
         self.target_sector = self.pick_target_sector()
+        self.near_target_sector = False
         self.coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_BEGIN)
         self.target_coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_DOWN)
         self.ticks = 0
         self.flies = []
 
-        num_flies = 5
+        num_flies = 2
         for i in range(num_flies):
             self.flies.append(FruitFly(game, self, artwork, i / num_flies))
 
+    def get_available_fruit(self):
+        for fruit in self.target_sector.ripe_fruits:
+            if not any(fly.roaming_target == fruit for fly in self.flies):
+                return fruit
+
+        return None
+
+    def current_sector_cleared(self):
+        return self.near_target_sector and all(fly.roaming_target == self and not fly.returning_to_spaceship
+                                               for fly in self.flies)
+
     def pick_target_sector(self):
         # for debugging
-        return self.game.sectors[0]
-        #return random.choice(self.game.sectors)
+        #return self.game.sectors[0]
+        return random.choice(self.game.sectors)
 
     def get_world_position(self):
         return self.planet.at(self.coordinates)
@@ -878,7 +931,7 @@ class Spaceship(IUpdateReceiver, IDrawable):
     def update(self):
         self.ticks += 1
 
-        if self.ticks % 1000 == 0:
+        if self.ticks % 1000 == 0 and self.current_sector_cleared():
             # pick another sector
             self.target_sector = self.pick_target_sector()
 
@@ -886,6 +939,9 @@ class Spaceship(IUpdateReceiver, IDrawable):
         self.target_coordinates.angle_degrees = self.target_sector.get_center_angle() + 10 * math.sin(now/10)
         self.target_coordinates.elevation = self.ELEVATION_DOWN + 30 * math.cos(now)
         self.coordinates = self.coordinates.lerp(target=self.target_coordinates, alpha=0.01)
+
+        self.near_target_sector = ((self.coordinates.elevation < self.ELEVATION_DOWN + 50) and
+                                   (abs(self.coordinates.angle_degrees - self.target_sector.get_center_angle()) < 15))
 
         for fly in self.flies:
             fly.update()
@@ -933,6 +989,9 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         return False
 
     def make_new_plants(self):
+        for plant in self.plants:
+            plant.was_deleted = True
+
         self.plants = []
         for j in range(self.number_of_plants):
             coordinate = PlanetSurfaceCoordinates(self.base_angle +
@@ -940,6 +999,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
             self.plants.append(Plant(self, self.game.planet, coordinate, self.fertility, self.game.artwork))
 
     def replant(self, plant):
+        plant.was_deleted = True
         index = self.plants.index(plant)
         self.plants[index] = Plant(self, self.game.planet, plant.position, self.fertility, self.game.artwork)
 
@@ -984,7 +1044,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.aabb_points = []
         self.aabb = None
 
-        self.growth = 100
+        self.growth = 0
         self.health = 100
         self.fertility = fertility
 
@@ -998,6 +1058,8 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.root.grow()
         self.root.grow()
         self.root.moregrow()
+
+        self.was_deleted = False
 
     def clicked(self):
         # TODO: Replant? / FIXME: only when zoomed in
@@ -1288,8 +1350,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.target_rotate = None
 
         self.debug_aabb = []
-        self.draw_debug_aabb = True
-        self.cull_via_aabb = True
+        self.draw_debug_aabb = False
+        self.cull_via_aabb = False
 
         self.drawing_minimap = False
 
