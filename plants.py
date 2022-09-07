@@ -3,6 +3,8 @@ import random
 import time
 import math
 import os
+import array
+import ctypes
 
 from pygame.locals import *
 
@@ -20,6 +22,96 @@ RIGHT_MOUSE_BUTTON = 3
  CLICK_PRIORITY_PLANT,
  CLICK_PRIORITY_SECTOR,
  CLICK_PRIORITY_OTHER) = range(4)
+
+def multiply_3x3(a, b):
+    return array.array('f', (
+        a[0]*b[0] + a[1]*b[3] + a[2]*b[6],
+        a[0]*b[1] + a[1]*b[4] + a[2]*b[7],
+        a[0]*b[2] + a[1]*b[5] + a[2]*b[8],
+
+        a[3]*b[0] + a[4]*b[3] + a[5]*b[6],
+        a[3]*b[1] + a[4]*b[4] + a[5]*b[7],
+        a[3]*b[2] + a[4]*b[5] + a[5]*b[8],
+
+        a[6]*b[0] + a[7]*b[3] + a[8]*b[6],
+        a[6]*b[1] + a[7]*b[4] + a[8]*b[7],
+        a[6]*b[2] + a[7]*b[5] + a[8]*b[8],
+    ))
+
+class Matrix3x3(object):
+    def __init__(self, initial=None):
+        self.m = array.array('f', initial.m if initial is not None else (
+            1., 0., 0.,
+            0., 1., 0.,
+            0., 0., 1.,
+        ))
+
+    def apply(self, v):
+        m = self.m
+
+        v = (v[0], v[1], 1.)
+
+        v = (
+            m[0]*v[0] + m[1]*v[1] + m[2]*v[2],
+            m[3]*v[0] + m[4]*v[1] + m[5]*v[2],
+            m[6]*v[0] + m[7]*v[1] + m[8]*v[2],
+        )
+
+        return (v[0]/v[2], v[1]/v[2])
+
+    def translate(self, x, y):
+        self.m = multiply_3x3(self.m, array.array('f', (
+            1., 0., x,
+            0., 1., y,
+            0., 0., 1.,
+        )))
+
+    def scale(self, x, y):
+        self.m = multiply_3x3(self.m, array.array('f', (
+            x,  0., 0.,
+            0., y,  0.,
+            0., 0., 1.,
+        )))
+
+    def rotate(self, angle_radians):
+        s = math.sin(angle_radians)
+        c = math.cos(angle_radians)
+
+        self.m = multiply_3x3(self.m, array.array('f', (
+            c, -s,  0.,
+            s,  c,  0.,
+            0., 0., 1.,
+        )))
+
+    def ortho(self, left, right, bottom, top):
+        w = (right - left)
+        tx = - (right + left) / w
+        h = (top - bottom)
+        ty = - (top + bottom) / h
+
+        self.m = multiply_3x3(self.m, array.array('f', (
+            2. / w,     0., tx,
+            0.,     2. / h, ty,
+            0.,         0.,  1.,
+        )))
+
+
+def test_matrix3x3():
+    def degrees_to_radians(deg):
+        return deg / 180 * math.pi
+
+    test_ops = [
+        ('scale', 0.5, 2.0),
+        ('translate', 30, 40),
+        ('rotate', degrees_to_radians(-90)),
+        ('ortho', 0, 1000, 1000, 0),
+    ]
+
+    for method, *args in test_ops:
+        m = Matrix3x3()
+        for v in ((100, 200), (0, 0)):
+            getattr(m, method)(*args)
+            print(f'{v} -> {method}{tuple(args)} -> {m.apply(v)}')
 
 
 class Sprite(object):
@@ -124,117 +216,258 @@ def aabb_from_points(points: [Vector2]):
     return Rect(x, y, w, h)
 
 
-def multiply_vec4_mat4(v, m):
-    return (
-        m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0] * v[3],
-        m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1] * v[3],
-        m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2] * v[3],
-        m[0][3] * v[0] + m[1][3] * v[1] + m[2][3] * v[2] + m[3][3] * v[3],
-    )
+class IDrawTask(object):
+    def draw(self):
+        raise NotImplementedError("Do not how to draw this task")
+
+
+class DrawSpriteTask(IDrawTask):
+    def __init__(self, sprite: Sprite):
+        self.sprite = sprite
+        self.data = array.array('f')
+
+    def append(self, position: Vector2, scale: float, apply_modelview_matrix):
+        right = Vector2(self.sprite.width * scale, 0)
+        bottom = Vector2(0, self.sprite.height * scale)
+
+        tl = Vector2(position)
+        tr = tl + right
+        bl = tl + bottom
+        br = bl + right
+
+        tl = apply_modelview_matrix(tl)
+        tr = apply_modelview_matrix(tr)
+        bl = apply_modelview_matrix(bl)
+        br = apply_modelview_matrix(br)
+
+        self.data.extend((
+            0., 0., tl.x, tl.y,
+            1., 0., tr.x, tr.y,
+            1., 1., br.x, br.y,
+
+            0., 0., tl.x, tl.y,
+            1., 1., br.x, br.y,
+            0., 1., bl.x, bl.y,
+        ))
+
+    def draw(self):
+        texture = self.sprite._get_texture()
+        glBindTexture(GL_TEXTURE_2D, texture.id)
+
+        glEnable(GL_TEXTURE_2D)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        glColor4f(1, 1, 1, 1)
+
+        buf = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, buf)
+        glBufferData(GL_ARRAY_BUFFER, self.data.tobytes(), GL_STATIC_DRAW)
+
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY)
+        glTexCoordPointer(2, GL_FLOAT, 4 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(0))
+
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glVertexPointer(2, GL_FLOAT, 4 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
+
+        glDrawArrays(GL_TRIANGLES, 0, int(len(self.data) / 4))
+
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY)
+        glDisableClientState(GL_VERTEX_ARRAY)
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+        glDeleteBuffers(1, [buf])
+
+        glDisable(GL_BLEND)
+        glDisable(GL_TEXTURE_2D)
+
+        glBindTexture(GL_TEXTURE_2D, 0)
+
+
+class MatrixStack(object):
+    def __init__(self):
+        self.stack = [Matrix3x3()]
+
+    def push(self):
+        self.stack.append(Matrix3x3(self.stack[-1]))
+
+    def pop(self):
+        self.stack.pop()
+
+    def identity(self):
+        self.stack[-1] = Matrix3x3()
+
+    def translate(self, x: float, y: float):
+        self.stack[-1].translate(x, y)
+
+    def rotate(self, angle_radians: float):
+        self.stack[-1].rotate(angle_radians)
+
+    def scale(self, x: float, y: float):
+        self.stack[-1].scale(x, y)
+
+    def ortho(self, left: float, right: float, bottom: float, top: float):
+        self.stack[-1].ortho(left, right, bottom, top)
+
+    def apply(self, v: Vector2):
+        return Vector2(self.stack[-1].apply(v))
+
+
+class FontCacheEntry(object):
+    def __init__(self, text: str, sprite: Sprite):
+        self.generation = -1
+        self.text = text
+        self.sprite = sprite
+
+
+class FontCache(object):
+    EXPIRE_GENERATIONS = 20
+
+    def __init__(self, font):
+        self.font = font
+        self.generation = 0
+        self.cache = {}
+
+    def lookup(self, text: str, color: Color):
+        key = (text, tuple(color))
+
+        if key not in self.cache:
+            sprite = Sprite(self.font.render(text, True, color), want_mipmap=False)
+            self.cache[key] = FontCacheEntry(text, sprite)
+
+        entry = self.cache[key]
+        entry.generation = self.generation
+        return entry.sprite
+
+    def gc(self):
+        self.generation += 1
+
+        keys_to_erase = set()
+        for key, value in self.cache.items():
+            if self.generation - value.generation > self.EXPIRE_GENERATIONS:
+                keys_to_erase.add(key)
+
+        for key in keys_to_erase:
+            del self.cache[key]
 
 
 class RenderContext(object):
-    Z_BACK = 1
-    Z_FRONT = 99
+    LAYER_BEHIND = 1
+    LAYER_FRONT = 99
 
     def __init__(self, width, height, resources: ResourceManager):
         self.width = width
         self.height = height
-        self.font = resources.font('RobotoMono-SemiBold.ttf', 16)
-        self.queue = []
+        self.font_cache = FontCache(resources.font('RobotoMono-SemiBold.ttf', 16))
+        self.queue = {}
         self.started = time.time()
         self.now = 0
         self.clock = pygame.time.Clock()
         self.fps = 0
+        self.projection_matrix_stack = MatrixStack()
+        self.modelview_matrix_stack = MatrixStack()
 
     def __enter__(self):
         self.now = time.time() - self.started
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glOrtho(0, self.width, self.height, 0, 0, 1)
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
+        self.camera_mode_overlay()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pygame.display.flip()
+        self.font_cache.gc()
         self.clock.tick()
         self.fps = self.clock.get_fps()
         return False
 
-    def camera_mode_overlay(self):
+    def transform_to_screenspace(self, p):
+        p = self.modelview_matrix_stack.apply(p)
+        p = self.projection_matrix_stack.apply(p)
+
+        p.x = self.width * (p.x + 1) / 2
+        p.y = self.height * (1 - ((p.y + 1) / 2))
+
+        return p
+
+    def setup_matrices(self, left, right, bottom, top):
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        glOrtho(0, self.width, self.height, 0, 0, 1)
+        self.projection_matrix_stack.identity()
+
+        glOrtho(left, right, bottom, top, 0, 1)
+        self.projection_matrix_stack.ortho(left, right, bottom, top)
 
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
+        self.modelview_matrix_stack.identity()
+
+    def camera_mode_overlay(self):
+        self.setup_matrices(0, self.width, self.height, 0)
 
     def camera_mode_world(self, planet, zoom, rotate):
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-
         left = -self.width / 2
         right = self.width / 2
         bottom = self.height / 2
         top = -self.height / 2
 
-        glOrtho(left, right, bottom, top, 0, 1)
-
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
+        self.setup_matrices(left, right, bottom, top)
 
         min_zoom = min(self.width, self.height) / ((planet.radius + planet.atmosphere_height) * 2)
 
         factor = min_zoom + (1.0 - min_zoom) * (1 - (1 - zoom))
-        glTranslatef(-planet.position.x, -planet.position.y, 0)
-        glTranslatef(0, (zoom**.8) * (planet.radius + self.height / 3), 0)
-        glScalef(factor, factor, factor)
-        glRotatef(rotate * 360, 0, 0, 1)
+
+        self.modelview_matrix_stack.translate(-planet.position.x, -planet.position.y)
+        self.modelview_matrix_stack.translate(0, (zoom**.8) * (planet.radius + self.height / 3))
+        self.modelview_matrix_stack.scale(factor, factor)
+        self.modelview_matrix_stack.rotate(rotate * 2 * math.pi)
 
     def clear(self, color: Color):
         glClearColor(*color.normalize())
         glClear(GL_COLOR_BUFFER_BIT)
 
-    def sprite(self, sprite: Sprite, position: Vector2, scale: float = 1, z_order: int = 0):
-        matrix = glGetFloatv(GL_MODELVIEW_MATRIX)
-        self.queue.append((z_order, sprite, position, scale, matrix))
+    def sprite(self, sprite: Sprite, position: Vector2, scale: float = 1, z_layer: int = 0):
+        key = (z_layer, sprite)
+        if key not in self.queue:
+            self.queue[key] = DrawSpriteTask(sprite)
+
+        self.queue[key].append(position, scale, self.modelview_matrix_stack.apply)
 
     def text(self, text: str, color: Color, position: Vector2):
-        self._blit(Sprite(self.font.render(text, True, color), want_mipmap=False), position)
+        # FIXME: Batching
+        self._blit(self.font_cache.lookup(text, color), position)
 
     def rect(self, color: Color, rectangle: Rect):
         glBegin(GL_TRIANGLES)
         glColor4f(*color.normalize())
-        glVertex2f(*rectangle.topleft)
-        glVertex2f(*rectangle.topright)
-        glVertex2f(*rectangle.bottomright)
-        glVertex2f(*rectangle.topleft)
-        glVertex2f(*rectangle.bottomright)
-        glVertex2f(*rectangle.bottomleft)
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topright))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomleft))
         glEnd()
 
     def aabb(self, color: Color, rectangle: Rect):
         glBegin(GL_LINE_STRIP)
         glColor4f(*color.normalize())
-        glVertex2f(*rectangle.topleft)
-        glVertex2f(*rectangle.topright)
-        glVertex2f(*rectangle.bottomright)
-        glVertex2f(*rectangle.bottomleft)
-        glVertex2f(*rectangle.topleft)
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topright))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomleft))
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
         glEnd()
 
     def circle(self, color: Color, center: Vector2, radius: float):
         glBegin(GL_TRIANGLE_FAN)
         glColor4f(*color.normalize())
-        glVertex2f(*center)
+        glVertex2f(*self.modelview_matrix_stack.apply(center))
 
         # Small circles can affort 20 steps, for bigger circles,
         # add enough steps that the largest line segment is 30 world units
         steps = min(100, max(20, (radius * 2 * math.pi) / 30))
 
         for angle in range(0, 361, int(360 / steps)):
-            glVertex2f(*(center + Vector2(radius, 0).rotate(angle)))
+            glVertex2f(*self.modelview_matrix_stack.apply(center + Vector2(radius, 0).rotate(angle)))
         glEnd()
 
     def textured_circle(self, sprite: Sprite, center: Vector2, radius: float):
@@ -249,7 +482,7 @@ class RenderContext(object):
         glBegin(GL_TRIANGLE_FAN)
         glColor4f(1, 1, 1, 1)
         glTexCoord2f(.5, .5)
-        glVertex2f(*center)
+        glVertex2f(*self.modelview_matrix_stack.apply(center))
 
         # Small circles can affort 20 steps, for bigger circles,
         # add enough steps that the largest line segment is 30 world units
@@ -258,7 +491,7 @@ class RenderContext(object):
         for angle in range(0, 361, int(360 / steps)):
             direction = Vector2(radius, 0).rotate(angle)
             glTexCoord2f(0.5 + 0.5 * direction.x / radius, 0.5 + 0.5 * direction.y / radius)
-            glVertex2f(*(center + direction))
+            glVertex2f(*self.modelview_matrix_stack.apply(center + direction))
         glEnd()
         glDisable(GL_BLEND)
         glDisable(GL_TEXTURE_2D)
@@ -277,10 +510,10 @@ class RenderContext(object):
         glBegin(GL_TRIANGLE_STRIP)
         glColor4f(*color.normalize())
 
-        glVertex2f(*a)
-        glVertex2f(*b)
-        glVertex2f(*c)
-        glVertex2f(*d)
+        glVertex2f(*self.modelview_matrix_stack.apply(a))
+        glVertex2f(*self.modelview_matrix_stack.apply(b))
+        glVertex2f(*self.modelview_matrix_stack.apply(c))
+        glVertex2f(*self.modelview_matrix_stack.apply(d))
 
         glEnd()
 
@@ -299,17 +532,17 @@ class RenderContext(object):
         glBegin(GL_TRIANGLES)
         glColor4f(1, 1, 1, 1)
         glTexCoord2f(0, 0)
-        glVertex2f(*rectangle.topleft)
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
         glTexCoord2f(1, 0)
-        glVertex2f(*rectangle.topright)
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topright))
         glTexCoord2f(1, 1)
-        glVertex2f(*rectangle.bottomright)
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
         glTexCoord2f(0, 0)
-        glVertex2f(*rectangle.topleft)
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.topleft))
         glTexCoord2f(1, 1)
-        glVertex2f(*rectangle.bottomright)
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomright))
         glTexCoord2f(0, 1)
-        glVertex2f(*rectangle.bottomleft)
+        glVertex2f(*self.modelview_matrix_stack.apply(rectangle.bottomleft))
         glEnd()
         glDisable(GL_BLEND)
         glDisable(GL_TEXTURE_2D)
@@ -317,13 +550,10 @@ class RenderContext(object):
         glBindTexture(GL_TEXTURE_2D, 0)
 
     def flush(self):
-        for z_order, sprite, position, scale, matrix in sorted(self.queue, key=lambda item: item[0]):
-            glMatrixMode(GL_MODELVIEW)
-            glPushMatrix()
-            glLoadMatrixf(matrix)
-            self._blit(sprite, position, scale)
-            glPopMatrix()
-        self.queue = []
+        for (z_layer, *key_args), task in sorted(self.queue.items(), key=lambda kv: kv[0][0]):
+            task.draw()
+
+        self.queue = {}
 
 
 class IClickReceiver(object):
@@ -348,12 +578,12 @@ class IMouseReceiver(object):
 
 class IUpdateReceiver(object):
     def update(self):
-        ...
+        raise NotImplementedError("Update not implemented")
 
 
 class IDrawable(object):
     def draw(self, ctx: RenderContext):
-        ...
+        raise NotImplementedError("Draw not implemented")
 
 
 class Branch(IClickReceiver):
@@ -454,8 +684,7 @@ class Branch(IClickReceiver):
         color = Color((cm1 * (100-health), cm2 * (244-150+health*1.5), 0))
 
         if self.plant.need_aabb:
-            transform = self.plant.sector.game.transform_point_gl
-            self.plant.aabb_points.extend((transform(pos), transform(to_point)))
+            self.plant.aabb_points.extend((ctx.transform_to_screenspace(pos), ctx.transform_to_screenspace(to_point)))
 
         zoom_adj = (100-self.plant.sector.game.zoom_slider.value)/100
 
@@ -470,22 +699,24 @@ class Branch(IClickReceiver):
                 ff = factor + 2 * zoom_adj
                 tomato = self.plant.artwork.get_tomato_sprite(factor, self.fruit_rotten)
                 topleft = to_point + Vector2(-(tomato.width*ff)/2, 0)
-                ctx.sprite(tomato, topleft, scale=ff, z_order=ctx.Z_FRONT)
+                ctx.sprite(tomato, topleft, scale=ff, z_layer=ctx.LAYER_FRONT)
 
                 # You can only click on ripe tomatoes
                 if self.plant.artwork.is_tomato_ripe(tomato):
-                    game = self.plant.sector.game
                     aabb = aabb_from_points([
-                        game.transform_point_gl(topleft),
-                        game.transform_point_gl(topleft + Vector2(ff * tomato.width, ff * tomato.height)),
+                        ctx.transform_to_screenspace(topleft),
+                        ctx.transform_to_screenspace(topleft + Vector2(0, ff * tomato.height)),
+                        ctx.transform_to_screenspace(topleft + Vector2(ff * tomato.width, 0)),
+                        ctx.transform_to_screenspace(topleft + Vector2(ff * tomato.width, ff * tomato.height)),
                     ])
 
                     # insert front, so that the layer ordering/event handling works correctly
+                    game = self.plant.sector.game
                     game.debug_aabb.insert(0, ('fruit', Color(255, 255, 255), aabb, self, CLICK_PRIORITY_FRUIT))
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
                 ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
-                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_order=ctx.Z_BACK)
+                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=ff, z_layer=ctx.LAYER_BEHIND)
 
 
 class PlanetSurfaceCoordinates(object):
@@ -494,7 +725,8 @@ class PlanetSurfaceCoordinates(object):
 
 
 class Planet(IDrawable):
-    def __init__(self, artwork):
+    def __init__(self, artwork, renderer):
+        self.renderer = renderer
         self.position = Vector2(0, 0)
         self.radius = 3000
         self.atmosphere_height = max(500, self.radius * 0.2)
@@ -509,9 +741,9 @@ class Planet(IDrawable):
     def at(self, position: PlanetSurfaceCoordinates):
         return self.position + Vector2(0, -self.radius).rotate(position.angle_degrees)
 
-    def apply_gl_transform(self, position: PlanetSurfaceCoordinates):
-        glTranslatef(*self.at(position), 0)
-        glRotatef(position.angle_degrees, 0, 0, 1)
+    def apply_planet_surface_transform(self, position: PlanetSurfaceCoordinates):
+        self.renderer.modelview_matrix_stack.translate(*self.at(position))
+        self.renderer.modelview_matrix_stack.rotate(position.angle_degrees * math.pi / 180)
 
 
 class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
@@ -628,10 +860,9 @@ class Plant(IUpdateReceiver, IClickReceiver):
     def draw(self, ctx):
         factor = self.growth / 100
 
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
+        ctx.modelview_matrix_stack.push()
 
-        self.planet.apply_gl_transform(self.position)
+        self.planet.apply_planet_surface_transform(self.position)
 
         self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health)
 
@@ -641,7 +872,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
             self.aabb_points = []
             self.need_aabb = False
 
-        glPopMatrix()
+        ctx.modelview_matrix_stack.pop()
 
 
 class House(IDrawable):
@@ -653,14 +884,13 @@ class House(IDrawable):
         self.house = artwork.get_random_house()
 
     def draw(self, ctx):
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
+        ctx.modelview_matrix_stack.push()
 
-        self.planet.apply_gl_transform(self.position)
+        self.planet.apply_planet_surface_transform(self.position)
 
         ctx.sprite(self.house, Vector2(-self.house.width/2, -self.house.height + 10))
 
-        glPopMatrix()
+        ctx.modelview_matrix_stack.pop()
 
 
 class Widget(IMouseReceiver, IDrawable):
@@ -820,22 +1050,6 @@ class Window(object):
     def set_subtitle(self, subtitle):
         pygame.display.set_caption(f'{self.title}: {subtitle}')
 
-    def transform_point_gl(self, p):
-        v = (p.x, p.y, 0, 1)
-
-        modelview = glGetFloatv(GL_MODELVIEW_MATRIX)
-        v = multiply_vec4_mat4(v, modelview)
-
-        projection = glGetFloatv(GL_PROJECTION_MATRIX)
-        v = multiply_vec4_mat4(v, projection)
-
-        result = Vector2(v[0] / v[3], v[1] / v[3])
-
-        result.x = self.width * (result.x + 1) / 2
-        result.y = self.height * (1 - ((result.y + 1) / 2))
-
-        return result
-
     def process_events(self, *, mouse: IMouseReceiver, update: IUpdateReceiver):
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -880,7 +1094,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.artwork = Artwork(self.resources)
         self.renderer = RenderContext(self.width, self.height, self.resources)
 
-        self.planet = Planet(self.artwork)
+        self.planet = Planet(self.artwork, self.renderer)
 
         self.sectors = []
         self.houses = []
@@ -1030,6 +1244,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
 
 def main():
+    #test_matrix3x3()
+
     game = Game()
 
     while game.running:
