@@ -30,7 +30,13 @@ parser.add_argument(
     action="store_true",
     help="Show debug info",
 )
-args = parser.parse_args()
+parser.add_argument(
+    "--fast",
+    action="store_true",
+    help="Fast growth to accelerate startup"
+)
+CLIARGS = parser.parse_args()
+
 
 def multiply_3x3(a, b):
     return array.array('f', (
@@ -996,7 +1002,8 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.number_of_plants = random.choice([2, 3, 5, 6])
         self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants] * 3
         self.fertility = int(random.uniform(10, 70))
-        self.growth_speed = random.uniform(0.02, 0.06) * 3
+        growth_speed = 100 if CLIARGS.fast else 3
+        self.growth_speed = random.uniform(0.02, 0.06) * growth_speed
         self.rotting_speed = random.uniform(0.01, 0.02)
         self.plants = []
         self.make_new_plants()
@@ -1383,7 +1390,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.target_rotate = None
 
         self.debug_aabb = []
-        self.draw_debug_aabb = args.debug
+        self.draw_debug_aabb = CLIARGS.debug
         self.cull_via_aabb = False
 
         self.drawing_minimap = False
