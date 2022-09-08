@@ -318,6 +318,8 @@ class DrawSpriteTask(IDrawTask):
         bl = tl + bottom
         br = bl + right
 
+        corners_in_modelview_space = [tl, tr, bl, br]
+
         tl = apply_modelview_matrix(tl)
         tr = apply_modelview_matrix(tr)
         bl = apply_modelview_matrix(bl)
@@ -332,6 +334,8 @@ class DrawSpriteTask(IDrawTask):
             1., 1., br.x, br.y,
             0., 1., bl.x, bl.y,
         ))
+
+        return corners_in_modelview_space
 
     def draw(self):
         texture = self.sprite._get_texture()
@@ -549,7 +553,7 @@ class RenderContext:
         if key not in self.queue:
             self.queue[key] = DrawSpriteTask(sprite)
 
-        self.queue[key].append(position, scale, self.modelview_matrix_stack.apply)
+        return self.queue[key].append(position, scale, self.modelview_matrix_stack.apply)
 
     def text(self, text: str, color: Color, position: Vector2):
         self.sprite(self.font_cache.lookup(text, color), position)
@@ -952,19 +956,15 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         fly_offset.x *= direction
 
         # FIXME: Rotation is all off, should use the current sector's modelview
-        ctx.sprite(fly_sprite, pos + fly_offset * scale_up, scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FLIES)
+        corners = ctx.sprite(fly_sprite, pos + fly_offset * scale_up, scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FLIES)
 
         if self.carrying_fruit:
             fly_offset += Vector2(0, fly_sprite.height/2)
-            ctx.sprite(self.artwork.get_ripe_tomato(), pos + fly_offset * scale_up,
-                       scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FRUIT)
+            corners.extend(ctx.sprite(self.artwork.get_ripe_tomato(), pos + fly_offset * scale_up,
+                                      scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FRUIT))
 
-        if True:  # insert check that fly is close enough to planet
-            # x, y = pos + fly_offset * scale_up
-            x = 100  # FIXME: self.aabb
-            y = 300
-            self.aabb = Rect(x, y, fly_sprite.width, fly_sprite.height)
-            self.aabb = self.aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
+        if not self.game.drawing_minimap:  # insert check that fly is close enough to planet
+            self.aabb = aabb_from_points([ctx.transform_to_screenspace(p) for p in corners])
 
         if self.aabb is not None:
             self.game.debug_aabb.insert(0, (LABEL_FLY, Color(255, 0, 0), self.aabb, self, CLICK_PRIORITY_FLY))
