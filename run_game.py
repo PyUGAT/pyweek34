@@ -915,6 +915,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
                     if self.carrying_fruit else self.FLYING_SPEED_NON_CARRYING)
             if did_arrive:
                 # ka'ching!
+                self.game.stolen_tomatoes += 1
                 self.carrying_fruit = False
                 self.returning_to_spaceship = False
                 self.spaceship.add_tomato()
@@ -1479,6 +1480,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.drawing_minimap = False
 
         self.tomato_score = 0
+        self.stolen_tomatoes = 0
 
     def get_zoom_adjustment(self):
         if self.drawing_minimap:
@@ -1632,6 +1634,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             # Claus-NEXT
             text = f'Tomatoes: {self.tomato_score}'
             ctx.text(text, Color(0, 255, 255), Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 10))
+
+            text = f'Stolen: {self.stolen_tomatoes}'
+            ctx.text(text, Color(0, 255, 255), Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 30))
             ctx.flush()
 
 def main():
