@@ -234,14 +234,10 @@ class Artwork:
         # TODO: Use animated cursors
         self.cursors = {
             # None: ...,  # in case we also want a custom cursor if not on object
-            "cut": resources.sprite('cursor_cut.png'),
-            "harvest": resources.sprite('cursor_harvest.png'),
+            "cut": resources.sprite('cursor_cut2_px.png'),
+            "harvest": resources.sprite('cursor_harvest_px.png'),
             "hunt": resources.sprite('flyflap.png'),
         }
-        for mode, sprite in self.cursors.items():
-            # TODO: Make cursor size dynamic??
-            self.cursors[mode].img = pygame.transform.scale(sprite.img, Vector2(40, 40))
-            self.cursors[mode].width, self.cursors[mode].height = self.cursors[mode].img.get_size()
 
         # animations (images)
         self.fly_animation = AnimatedImageSprite([
