@@ -227,7 +227,6 @@ class Artwork:
         )]
         self.leaves = [resources.sprite(f'leafpx{num}.png') for num in (1, 2, 3)]
         self.rocks = [resources.sprite(f'rockpx{num}.png') for num in (1, 2, 3, 4)]
-        self.staengel = resources.sprite('staengel.png')
         self.planet = resources.sprite('mars.png')
         self.spaceship = resources.sprite('spaceship.png')
 
@@ -265,9 +264,6 @@ class Artwork:
 
     def get_random_rock(self):
         return random.choice(self.rocks)
-
-    def get_staengel(self):
-        return self.staengel
 
     def get_planet(self):
         return self.planet
@@ -1518,11 +1514,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
             coordinate = PlanetSurfaceCoordinates(sector.get_center_angle() + 0.5 * 360 / self.num_sectors)
             self.rocks.append(Rock(self.planet, coordinate, self.artwork))
-
-        # A long time ago... the staengel cometh to live here
-        # staengel = Rock(self.planet, PlanetSurfaceCoordinates(-20), self.artwork)
-        # staengel.rock = self.artwork.get_staengel()
-        # self.rocks.append(staengel)
 
         self.spaceship = Spaceship(self, self.planet, self.artwork)
 
