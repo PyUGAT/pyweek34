@@ -224,9 +224,9 @@ class Artwork:
             'tomato2-bad.png',
         )]
         self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
-        self.houses = [resources.sprite(f'house{num}.png') for num in (1, 2, 3, 4)]
+        self.rocks = [resources.sprite(f'rock{num}.png') for num in (1, 2, )]
         self.staengel = resources.sprite('staengel.png')
-        self.planet = resources.sprite('mars.png')
+        self.planet = resources.sprite('mars.jpg')
         self.spaceship = resources.sprite('spaceship.png')
 
         # TODO: Use animated cursors
@@ -264,8 +264,8 @@ class Artwork:
     def get_random_leaf(self):
         return random.choice(self.leaves)
 
-    def get_random_house(self):
-        return random.choice(self.houses)
+    def get_random_rock(self):
+        return random.choice(self.rocks)
 
     def get_staengel(self):
         return self.staengel
@@ -1161,20 +1161,20 @@ class Plant(IUpdateReceiver, IClickReceiver):
         ctx.modelview_matrix_stack.pop()
 
 
-class House(IDrawable):
+class Rock(IDrawable):
     def __init__(self, planet: Planet, position: PlanetSurfaceCoordinates, artwork: Artwork):
         self.planet = planet
         self.position = position
         self.artwork = artwork
 
-        self.house = artwork.get_random_house()
+        self.rock = artwork.get_random_rock()
 
     def draw(self, ctx):
         ctx.modelview_matrix_stack.push()
 
         self.planet.apply_planet_surface_transform(self.position)
 
-        ctx.sprite(self.house, Vector2(-self.house.width/2, -self.house.height + 10))
+        ctx.sprite(self.rock, Vector2(-self.rock.width/2, -self.rock.height + 10))
 
         ctx.modelview_matrix_stack.pop()
 
@@ -1384,7 +1384,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.planet = Planet(self.artwork, self.renderer)
 
         self.sectors = []
-        self.houses = []
+        self.rocks = []
 
         self.zoom_slider = Slider('zoom', 0, 100, 100)
         self.rotate_slider = Slider('rotate', 0, 360, 0)
@@ -1403,12 +1403,13 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             sector = Sector(self, i, i*340/self.num_sectors)
             self.sectors.append(sector)
 
-            #coordinate = PlanetSurfaceCoordinates(sector.get_center_angle() + 0.5 * 360 / self.num_sectors)
-            #self.houses.append(House(self.planet, coordinate, self.artwork))
+            coordinate = PlanetSurfaceCoordinates(sector.get_center_angle() + 0.5 * 360 / self.num_sectors)
+            self.rocks.append(Rock(self.planet, coordinate, self.artwork))
 
-        staengel = House(self.planet, PlanetSurfaceCoordinates(-20), self.artwork)
-        staengel.house = self.artwork.get_staengel()
-        self.houses.append(staengel)
+        # A long time ago... the staengel cometh to live here
+        # staengel = Rock(self.planet, PlanetSurfaceCoordinates(-20), self.artwork)
+        # staengel.rock = self.artwork.get_staengel()
+        # self.rocks.append(staengel)
 
         self.spaceship = Spaceship(self, self.planet, self.artwork)
 
@@ -1501,8 +1502,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 if not self.cull_via_aabb or not sector.aabb or visible_rect.colliderect(sector.aabb):
                     sector.draw(ctx)
 
-        for house in self.houses:
-            house.draw(ctx)
+        for rock in self.rocks:
+            rock.draw(ctx)
 
         self.spaceship.draw(ctx)
 
