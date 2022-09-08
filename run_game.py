@@ -21,13 +21,15 @@ RIGHT_MOUSE_BUTTON = 3
 
 (CLICK_PRIORITY_FRUIT,
  CLICK_PRIORITY_PLANT,
+ CLICK_PRIORITY_FLY,
  CLICK_PRIORITY_SECTOR,
- CLICK_PRIORITY_OTHER) = range(4)
+ CLICK_PRIORITY_OTHER) = range(5)
 
 LABEL_FRUIT = "fruit"
 LABEL_MINIMAP = "minimap"
 LABEL_PLANT = "plant"
 LABEL_SECTOR = "sector"
+LABEL_FLY = "fly"
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -234,6 +236,7 @@ class Artwork:
             # None: ...,  # in case we also want a custom cursor if not on object
             "cut": resources.sprite('cursor_cut.png'),
             "harvest": resources.sprite('cursor_harvest.png'),
+            "hunt": resources.sprite('flyflap.png'),
         }
         for mode, sprite in self.cursors.items():
             # TODO: Make cursor size dynamic??
@@ -815,6 +818,7 @@ class Branch(IClickReceiver):
                     game = self.plant.sector.game
                     game.debug_aabb.insert(0, (LABEL_FRUIT, Color(255, 255, 255), aabb, self, CLICK_PRIORITY_FRUIT))
 
+
                     ctx.modelview_matrix_stack.push()
                     ctx.modelview_matrix_stack.identity()
                     game.planet.apply_planet_surface_transform(self.plant.position)
@@ -860,7 +864,9 @@ class Planet(IDrawable):
         self.renderer.modelview_matrix_stack.rotate(position.angle_degrees * math.pi / 180)
 
 
-class FruitFly(IUpdateReceiver, IDrawable):
+class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
+    AABB_PADDING_PX = 20
+    CURSOR = "hunt"
     FLYING_SPEED_CARRYING = 1
     FLYING_SPEED_NON_CARRYING = 3
 
@@ -875,6 +881,7 @@ class FruitFly(IUpdateReceiver, IDrawable):
         self.x_direction = 1
         self.returning_to_spaceship = False
         self.carrying_fruit = False
+        self.aabb = None
 
     def get_world_position(self):
         return self.roaming_target.get_world_position() + self.roaming_offset
@@ -891,6 +898,15 @@ class FruitFly(IUpdateReceiver, IDrawable):
             return new_roaming_offset, False
         else:
             return self.roaming_offset, True
+
+    def clicked(self):
+        # TODO: Add score, prevent player from clicking if fly is located too far out in space
+        is_fly_close_enough_to_surface = True
+        if is_fly_close_enough_to_surface:
+            print('Brzzzz... you hit a fly')
+            self.spaceship.flies.remove(self)
+            return True
+        return False
 
     def update(self):
         now = self.game.renderer.now
@@ -930,6 +946,8 @@ class FruitFly(IUpdateReceiver, IDrawable):
         self.roaming_offset = new_roaming_offset
 
     def draw_fly_at(self, ctx, pos, direction, scale_up):
+        self.aabb = None
+
         fly_sprite = self.sprite_animation.get(ctx)
         fly_offset = -Vector2(fly_sprite.width, fly_sprite.height) / 2
         fly_offset.x *= direction
@@ -941,6 +959,16 @@ class FruitFly(IUpdateReceiver, IDrawable):
             fly_offset += Vector2(0, fly_sprite.height/2)
             ctx.sprite(self.artwork.get_ripe_tomato(), pos + fly_offset * scale_up,
                        scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FRUIT)
+
+        if True:  # insert check that fly is close enough to planet
+            # x, y = pos + fly_offset * scale_up
+            x = 100  # FIXME: self.aabb
+            y = 300
+            self.aabb = Rect(x, y, fly_sprite.width, fly_sprite.height)
+            self.aabb = self.aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
+
+        if self.aabb is not None:
+            self.game.debug_aabb.insert(0, (LABEL_FLY, Color(255, 0, 0), self.aabb, self, CLICK_PRIORITY_FLY))
 
     def draw(self, ctx):
         scale_up = 1 + self.game.get_zoom_adjustment()
@@ -1090,7 +1118,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
 
 class Plant(IUpdateReceiver, IClickReceiver):
-    AABB_PADDING_PX = 20
+    AABB_PADDING_PX = 100
     CURSOR = "cut"
 
     def __init__(self, sector: Sector, planet: Planet, position: PlanetSurfaceCoordinates, fertility, artwork: Artwork):
@@ -1123,13 +1151,13 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.was_deleted = False
 
     def clicked(self):
+        print('in class Plant.clicked')
         # TODO: Replant? / FIXME: only when zoomed in
         if self.sector.game.zoom_slider.value > 95:
             self.sector.replant(self)
             return True
         else:
             print('ingoring plant click - not fully zoomed in!')
-
         return False
 
     def update(self):
@@ -1532,6 +1560,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             glEnable(GL_SCISSOR_TEST)
 
             self.debug_aabb.append((LABEL_MINIMAP, Color(0, 255, 255), self.minimap.rect, self.minimap, CLICK_PRIORITY_OTHER))
+
+
 
             ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 360)
 
