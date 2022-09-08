@@ -6,3 +6,7 @@ to do that. In that case, see for example [here](https://www.youtube.com/watch?v
 ## Picking Tomatoes
 
 Fragments from 400639__lampeight__bush-weed-scrape-pile-rustle-dump.wav.
+
+## Cutting Plants
+
+Fragments from https://freesound.org/people/blukotek/sounds/251660/.

@@ -246,6 +246,9 @@ class Artwork:
 
         # sounds
         self.pick = [resources.sound(f'pick{num}.wav') for num in (1, )]
+        self.mowing = [resources.sound(f'mowing{num}.wav') for num in (1, 2, 3)]
+        self.slap = [resources.sound(f'slap{num}.wav') for num in (1, 2, 3)]
+        self.ripe_sound = resources.sound('ripe.wav')
 
     def is_tomato_ripe(self, tomato: ImageSprite):
         return tomato == self.get_ripe_tomato()
@@ -279,6 +282,15 @@ class Artwork:
 
     def get_random_pick_sound(self):
         return random.choice(self.pick)
+
+    def get_random_mowing_sound(self):
+        return random.choice(self.mowing)
+
+    def get_random_slap_sound(self):
+        return random.choice(self.slap)
+
+    def get_ripe_sound(self):
+        return self.ripe_sound
 
 
 def aabb_from_points(points: [Vector2]):
@@ -743,6 +755,7 @@ class Branch(IClickReceiver):
         self.random_leaf_appearance_value = random.uniform(20, 70)
         self.random_fruit_appearance_value = random.uniform(40, 70)
         self.fruit_world_position = Vector2(0, 0)
+        self.was_ripe = False
 
     def get_world_position(self):
         return self.fruit_world_position
@@ -845,6 +858,10 @@ class Branch(IClickReceiver):
 
                 # You can only click on ripe tomatoes
                 if self.plant.artwork.is_tomato_ripe(tomato):
+                    if not self.was_ripe:
+                        self.plant.artwork.get_ripe_sound().play()
+                        self.was_ripe = True
+
                     aabb = aabb_from_points([
                         ctx.transform_to_screenspace(topleft),
                         ctx.transform_to_screenspace(topleft + Vector2(0, ff * tomato.height)),
@@ -904,7 +921,7 @@ class Planet(IDrawable):
 
 
 class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
-    AABB_PADDING_PX = 10
+    AABB_PADDING_PX = 40
     CURSOR = "hunt"
     FLYING_SPEED_CARRYING = 1
     FLYING_SPEED_NON_CARRYING = 3
@@ -944,6 +961,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         is_fly_close_enough_to_surface = True
         if is_fly_close_enough_to_surface:
             print('Brzzzz... you hit a fly')
+            self.artwork.get_random_slap_sound().play()
             self.spaceship.flies.remove(self)
             return True
         return False
@@ -1152,6 +1170,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
     def replant(self, plant):
         plant.was_deleted = True
+        plant.artwork.get_random_mowing_sound().play()
         self.plant_trash_heap.append(plant)
         index = self.plants.index(plant)
         self.plants[index] = Plant(self, self.game.planet, plant.position, self.fertility, self.game.artwork)
@@ -1229,7 +1248,6 @@ class Plant(IUpdateReceiver, IClickReceiver):
 
     def clicked(self):
         print('in class Plant.clicked')
-        # TODO: Replant? / FIXME: only when zoomed in
         self.sector.replant(self)
         return True
 

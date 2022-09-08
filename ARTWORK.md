@@ -11,3 +11,10 @@ Please add to this list if you're importing artwork (images/sounds/...):
 * https://opengameart.org/node/50434
 * https://openclipart.org/detail/2469/fly-swatter
 
+
+Sounds:
+
+* https://freesound.org/people/LampEight/sounds/400639/
+* https://freesound.org/people/blukotek/sounds/251660/
+* https://freesound.org/people/greenvwbeetle/sounds/328118/
+* https://freesound.org/people/florianreichelt/sounds/460509/
