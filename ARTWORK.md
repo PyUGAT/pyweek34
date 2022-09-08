@@ -9,4 +9,5 @@ Please add to this list if you're importing artwork (images/sounds/...):
 * https://opengameart.org/content/happy-fly-enemy-game-character
 * https://www.rawpixel.com/image/6870635/png-sticker-public-domain
 * https://opengameart.org/node/50434
+* https://openclipart.org/detail/2469/fly-swatter
 

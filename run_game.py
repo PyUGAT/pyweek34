@@ -235,7 +235,7 @@ class Artwork:
             # None: ...,  # in case we also want a custom cursor if not on object
             "cut": resources.sprite('cursor_cut2_px.png'),
             "harvest": resources.sprite('cursor_harvest_px.png'),
-            "hunt": resources.sprite('flyflap.png'),
+            "hunt": resources.sprite('cursor_swatter_px.png'),
         }
 
         # animations (images)
