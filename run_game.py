@@ -706,7 +706,7 @@ class Branch(IClickReceiver):
 
     def clicked(self):
         # TODO: Add score (check fruit_rotten first!)
-        if self.has_fruit and self.plant.sector.game.zoom_slider.value >= 95:
+        if self.has_fruit:
             self.has_fruit = False
             self.plant.artwork.get_random_pick_sound().play()  # Claus-TBD: artwork from plant
             return True
@@ -1097,12 +1097,6 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
     def clicked(self):
         print(f"ouch, i'm a sector! {self.index}")
-        if self.game.zoom_slider.value < 50:
-            print('zooming into sector')
-            self.game.target_rotate = 360-self.get_center_angle()
-            self.game.target_zoom = 100
-            return True
-
         return False
 
     def make_new_plants(self):
@@ -1196,12 +1190,8 @@ class Plant(IUpdateReceiver, IClickReceiver):
     def clicked(self):
         print('in class Plant.clicked')
         # TODO: Replant? / FIXME: only when zoomed in
-        if self.sector.game.zoom_slider.value > 95:
-            self.sector.replant(self)
-            return True
-        else:
-            print('ingoring plant click - not fully zoomed in!')
-        return False
+        self.sector.replant(self)
+        return True
 
     def update(self):
         if self.growth < 100:
@@ -1449,8 +1439,8 @@ class Minimap(IClickReceiver):
         self.rect = Rect(self.game.width - border - size.x, border, size.x, size.y)
 
     def clicked(self):
-        self.game.target_zoom = 0 if self.game.zoom_slider.value > 50 else 100
-        return True
+        # TODO: Could do something with the minimap
+        return False
 
 
 class Game(Window, IUpdateReceiver, IMouseReceiver):
@@ -1467,13 +1457,11 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.sectors = []
         self.rocks = []
 
-        self.zoom_slider = Slider('zoom', 0, 100, 100)
-        self.rotate_slider = Slider('rotate', 0, 360, 0)
+        self.rotation_angle_degrees = 0
 
         self.gui = DebugGUI(self, [
             VBox([
-                self.zoom_slider,
-                self.rotate_slider,
+                # ...
             ])
         ])
 
@@ -1494,9 +1482,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.spaceship = Spaceship(self, self.planet, self.artwork)
 
-        self.target_zoom = None
-        self.target_rotate = None
-
         self.debug_aabb = []
         self.draw_debug_aabb = CLIARGS.debug
         self.cull_via_aabb = False
@@ -1510,7 +1495,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             return 2
 
         return 0
-        #return 2 * (100-self.zoom_slider.value)/100
 
     def process_events(self):
         super().process_events(mouse=self.gui, update=self)
@@ -1518,8 +1502,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         dy = self.gui.wheel_sum.y
         if dy != 0:
             self.invalidate_aabb()
-        self.rotate_slider.value += (dy * (30000 / self.planet.get_circumfence()))
-        self.rotate_slider.value %= self.rotate_slider.max
+        self.rotation_angle_degrees += (dy * (30000 / self.planet.get_circumfence()))
+        self.rotation_angle_degrees %= 360
         self.gui.wheel_sum.y = 0
 
         self.set_subtitle(f'{self.renderer.fps:.0f} FPS')
@@ -1553,23 +1537,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             sector.make_new_plants()
 
     def update(self):
-        if self.target_rotate is not None:
-            alpha = 0.2
-            if abs(self.target_rotate - self.rotate_slider.value) < 2:
-                self.rotate_slider.value = self.target_rotate
-                self.target_rotate = None
-                self.invalidate_aabb()
-            else:
-                self.rotate_slider.value = alpha * self.target_rotate + (1 - alpha) * self.rotate_slider.value
-        elif self.target_zoom is not None:
-            alpha = 0.1
-            if abs(self.target_zoom - self.zoom_slider.value) < 0.01:
-                self.zoom_slider.value = self.target_zoom
-                self.target_zoom = None
-                self.invalidate_aabb()
-            else:
-                self.zoom_slider.value = alpha * self.target_zoom + (1 - alpha) * self.zoom_slider.value
-
         for sector in self.sectors:
             sector.update()
 
@@ -1599,7 +1566,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             self.debug_aabb = []
 
             # Draw screen content
-            ctx.camera_mode_world(self.planet, self.zoom_slider.value / 100, self.rotate_slider.value / 360)
+            ctx.camera_mode_world(self.planet, zoom=1.0, rotate=self.rotation_angle_degrees / 360)
             self.draw_scene(ctx, bg_color=Color(30, 30, 30), details=True, visible_rect=visible_rect)
 
             # GL coordinate system origin = bottom left
@@ -1614,12 +1581,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
             self.debug_aabb.append((LABEL_MINIMAP, Color(0, 255, 255), self.minimap.rect, self.minimap, CLICK_PRIORITY_OTHER))
 
-
-
-            ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotate_slider.value / 360)
+            self.drawing_minimap = True
 
             # TODO: Draw stylized scene
-            self.drawing_minimap = True
+            ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotation_angle_degrees / 360)
             self.draw_scene(ctx, bg_color=Color(10, 10, 10), details=False, visible_rect=visible_rect)
             self.drawing_minimap = False
 
