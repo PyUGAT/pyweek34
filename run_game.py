@@ -1089,6 +1089,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.make_new_plants()
         self.aabb = None  # axis-aligned bounding box
         self.ripe_fruits = []
+        self.plant_trash_heap = []
 
     def get_center_angle(self):
         return (self.base_angle + self.sector_width_degrees / 2)
@@ -1106,6 +1107,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
     def make_new_plants(self):
         for plant in self.plants:
             plant.was_deleted = True
+            self.plant_trash_heap.append(plant)
 
         self.plants = []
         for j in range(self.number_of_plants):
@@ -1115,6 +1117,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
     def replant(self, plant):
         plant.was_deleted = True
+        self.plant_trash_heap.append(plant)
         index = self.plants.index(plant)
         self.plants[index] = Plant(self, self.game.planet, plant.position, self.fertility, self.game.artwork)
 
@@ -1127,9 +1130,17 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         for plant in self.plants:
             plant.update()
 
+        for plant in self.plant_trash_heap:
+            plant.trash_time += 1
+
+        self.plant_trash_heap = [plant for plant in self.plant_trash_heap if plant.trash_time < 3 * 60]
+
     def draw(self, ctx):
         self.aabb = None
         self.ripe_fruits = []
+
+        for plant in self.plant_trash_heap:
+            plant.draw(ctx)
 
         for plant in self.plants:
             plant.draw(ctx)
@@ -1178,6 +1189,9 @@ class Plant(IUpdateReceiver, IClickReceiver):
 
         self.was_deleted = False
 
+        self.trash_rotation_direction = random.choice([-1, +1])
+        self.trash_time = 0
+
     def clicked(self):
         print('in class Plant.clicked')
         # TODO: Replant? / FIXME: only when zoomed in
@@ -1205,6 +1219,14 @@ class Plant(IUpdateReceiver, IClickReceiver):
         ctx.modelview_matrix_stack.push()
 
         self.planet.apply_planet_surface_transform(self.position)
+
+        if self.trash_time > 0:
+            # Plant escapes into space
+            approx_height = (self.root.length*self.growth/100)
+            ctx.modelview_matrix_stack.translate(0, -self.trash_time*10)
+            ctx.modelview_matrix_stack.translate(0, -approx_height/2)
+            ctx.modelview_matrix_stack.rotate(self.trash_time*0.1*self.trash_rotation_direction)
+            ctx.modelview_matrix_stack.translate(0, +approx_height/2)
 
         self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health)
 
