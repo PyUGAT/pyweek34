@@ -226,7 +226,7 @@ class Artwork:
             'tomato-bad.png',
         )]
         self.leaves = [resources.sprite(f'leafpx{num}.png') for num in (1, 2, 3)]
-        self.rocks = [resources.sprite(f'rock{num}.png') for num in (1, 2, )]
+        self.rocks = [resources.sprite(f'rockpx{num}.png') for num in (1, 2, 3, 4)]
         self.staengel = resources.sprite('staengel.png')
         self.planet = resources.sprite('mars.png')
         self.spaceship = resources.sprite('spaceship.png')
