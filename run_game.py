@@ -1576,6 +1576,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.tomato_score = 0
 
+        stars_range = self.planet.radius * 2
+        self.stars = [Vector2(random.uniform(-stars_range, +stars_range),
+                              random.uniform(-stars_range, +stars_range)) for i in range(100)]
+
     def get_zoom_adjustment(self):
         if self.drawing_minimap:
             return 2
@@ -1631,6 +1635,12 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
     def draw_scene(self, ctx, *, bg_color: Color, details: bool, visible_rect: Rect):
         ctx.clear(bg_color)
 
+        for idx, star in enumerate(self.stars):
+            size = 1 + (idx % 3)
+            ctx.rect(Color(255, 255, 255, 128), Rect(star.x, star.y, size, size))
+
+        ctx.flush()
+
         atmosphere_color_ground = Color(30, 60, 150)
         atmosphere_color_sky = Color(atmosphere_color_ground)
         atmosphere_color_sky.a = 0
@@ -1661,7 +1671,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
             # Draw screen content
             ctx.camera_mode_world(self.planet, zoom=1.0, rotate=self.rotation_angle_degrees / 360)
-            self.draw_scene(ctx, bg_color=Color(30, 30, 30), details=True, visible_rect=visible_rect)
+            self.draw_scene(ctx, bg_color=Color(10, 10, 20), details=True, visible_rect=visible_rect)
 
             # GL coordinate system origin = bottom left
             minimap_gl_rect = (int(self.minimap.rect.x),
