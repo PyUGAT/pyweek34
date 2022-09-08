@@ -270,7 +270,7 @@ class Artwork:
     def get_staengel(self):
         return self.staengel
 
-    def get_mars(self):
+    def get_planet(self):
         return self.planet
 
     def get_spaceship(self):
@@ -839,12 +839,12 @@ class PlanetSurfaceCoordinates:
 
 
 class Planet(IDrawable):
-    def __init__(self, artwork, renderer):
+    def __init__(self, artwork: Artwork, renderer):
         self.renderer = renderer
         self.position = Vector2(0, 0)
         self.radius = 500
         self.atmosphere_height = max(100, self.radius * 0.4)
-        self.sprite = artwork.get_mars()
+        self.sprite = artwork.get_planet()
 
     def get_circumfence(self):
         return self.radius * 2 * math.pi
