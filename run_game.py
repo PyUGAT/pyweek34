@@ -1126,7 +1126,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.base_angle = base_angle
         self.number_of_plants = random.choice([2, 3, 5, 6])
         self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants] * 3
-        self.fertility = int(random.uniform(10, 70))
+        self.fertility = int(random.uniform(10, 50))
         growth_speed = 100 if CLIARGS.fast else 3
         self.growth_speed = random.uniform(0.02, 0.06) * growth_speed
         self.rotting_speed = random.uniform(0.01, 0.02)
