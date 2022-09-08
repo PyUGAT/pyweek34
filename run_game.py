@@ -764,13 +764,7 @@ class Branch(IClickReceiver):
         # TODO: Add score (check fruit_rotten first!)
         if self.has_fruit:
             self.has_fruit = False
-
-            # shake the plant
-            if self.plant.wind_amplitude <= 0:
-                self.plant.wind_amplitude = 90
-            else:
-                self.plant.wind_amplitude = -90
-
+            self.plant.shake()
             self.plant.artwork.get_random_pick_sound().play()  # Claus-TBD: artwork from plant
             return True
 
@@ -1006,6 +1000,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
                 new_roaming_offset, did_arrive = self.fly_towards_target(self.FLYING_SPEED_NON_CARRYING)
                 if did_arrive:
                     self.carrying_fruit = fruit.has_fruit and not fruit.plant.was_deleted
+                    fruit.plant.shake()
                     fruit.has_fruit = False
                     self.returning_to_spaceship = True
             else:
@@ -1292,6 +1287,15 @@ class Plant(IUpdateReceiver, IClickReceiver):
         print('in class Plant.clicked')
         self.sector.replant(self)
         return True
+
+    def shake(self):
+        # shake the plant
+        if self.wind_amplitude <= 0:
+            self.wind_amplitude = 90
+        else:
+            # if we have already been shaking,
+            # shake in the other direction
+            self.wind_amplitude = -90
 
     def update(self):
         if self.growth < 100:
