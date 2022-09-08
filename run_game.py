@@ -939,6 +939,9 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         self.carrying_fruit = False
         self.aabb = None
 
+        self.trash_rotation_direction = random.choice([-1, +1])
+        self.trash_time = 0
+
     def get_world_position(self):
         return self.roaming_target.get_world_position() + self.roaming_offset
 
@@ -959,10 +962,11 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         # TODO: Add score, prevent player from clicking if fly is located too far out in space
         # Also, to simplify matters, make fruitfly with tomato invincible ;)
         is_fly_close_enough_to_surface = True
-        if is_fly_close_enough_to_surface:
+        if is_fly_close_enough_to_surface and self in self.spaceship.flies:
             print('Brzzzz... you hit a fly')
             self.artwork.get_random_slap_sound().play()
             self.spaceship.flies.remove(self)
+            self.spaceship.dead_flies.append(self)
             return True
         return False
 
@@ -1011,20 +1015,39 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         fly_offset = -Vector2(fly_sprite.width, fly_sprite.height) / 2
         fly_offset.x *= direction
 
+        ctx.modelview_matrix_stack.push()
+
+        position = pos + fly_offset * scale_up
+
+        if self.trash_time > 0:
+            # Fly escapes into space
+            #approx_height = (self.root.length*self.growth/100)
+            #ctx.modelview_matrix_stack.translate(0, -self.trash_time*10)
+            ctx.modelview_matrix_stack.translate(*(self.get_world_position().normalize() * (10 * self.trash_time)))
+            ctx.modelview_matrix_stack.translate(*self.get_world_position())
+            ctx.modelview_matrix_stack.rotate(self.trash_time*0.1*self.trash_rotation_direction)
+            ctx.modelview_matrix_stack.translate(*-self.get_world_position())
+            #ctx.modelview_matrix_stack.translate(+position.x, +position.y)
+
         # FIXME: Rotation is all off, should use the current sector's modelview
-        corners = ctx.sprite(fly_sprite, pos + fly_offset * scale_up, scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FLIES)
+        corners = ctx.sprite(fly_sprite, position, scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FLIES)
 
         if self.carrying_fruit:
             fly_offset += Vector2(0, fly_sprite.height/2)
-            corners.extend(ctx.sprite(self.artwork.get_ripe_tomato(), pos + fly_offset * scale_up,
+            corners.extend(ctx.sprite(self.artwork.get_ripe_tomato(), position,
                                       scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FRUIT))
 
-        if not self.game.drawing_minimap:  # insert check that fly is close enough to planet
+        planet = self.game.planet
+
+        if not self.game.drawing_minimap and self.get_world_position().length() < (planet.radius + planet.atmosphere_height):
             self.aabb = aabb_from_points([ctx.transform_to_screenspace(p) for p in corners])
             self.aabb = self.aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
 
         if self.aabb is not None:
             self.game.debug_aabb.insert(0, (LABEL_FLY, Color(255, 0, 0), self.aabb, self, CLICK_PRIORITY_FLY))
+
+        ctx.modelview_matrix_stack.pop()
+
 
     def draw(self, ctx):
         scale_up = 1 + self.game.get_zoom_adjustment()
@@ -1054,6 +1077,8 @@ class Spaceship(IUpdateReceiver, IDrawable):
         self.flies = []
         self.collected_tomatoes = 0
         self.total_collected = 0
+
+        self.dead_flies = []
 
         self.breed_flies()
 
@@ -1114,6 +1139,11 @@ class Spaceship(IUpdateReceiver, IDrawable):
         for fly in self.flies:
             fly.update()
 
+        for dead_fly in self.dead_flies:
+            dead_fly.trash_time += 1
+
+        self.dead_flies = [dead_fly for dead_fly in self.dead_flies if dead_fly.trash_time < 3 * 60]
+
     def is_time_to_breed_flies(self):
         return self.ticks % self.BREEDING_EVERY_N_TICKS == 0
 
@@ -1131,6 +1161,9 @@ class Spaceship(IUpdateReceiver, IDrawable):
 
         for fly in self.flies:
             fly.draw(ctx)
+
+        for dead_fly in self.dead_flies:
+            dead_fly.draw(ctx)
 
 
 class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
