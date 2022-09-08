@@ -384,6 +384,13 @@ class DrawColoredVerticesTask(IDrawTask):
             vertex = apply_modelview_matrix(v)
             self.data.extend((vertex.x, vertex.y, r, g, b, a))
 
+    def append_separate(self, colors: [Color], vertices: [Vector2], apply_modelview_matrix):
+        for color, vertex in zip(colors, vertices):
+            vertex = apply_modelview_matrix(vertex)
+            r, g, b, a = color.normalize()
+
+            self.data.extend((vertex.x, vertex.y, r, g, b, a))
+
     def draw(self):
         buf = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, buf)
@@ -395,7 +402,12 @@ class DrawColoredVerticesTask(IDrawTask):
         glEnableClientState(GL_COLOR_ARRAY)
         glColorPointer(4, GL_FLOAT, 6 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
 
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
         glDrawArrays(self.mode, 0, int(len(self.data) / 6))
+
+        glDisable(GL_BLEND)
 
         glDisableClientState(GL_COLOR_ARRAY)
         glDisableClientState(GL_VERTEX_ARRAY)
@@ -600,6 +612,29 @@ class RenderContext:
 
         self._colored_vertices(GL_TRIANGLE_STRIP, color, vertices)
 
+    def donut(self, color_inner: Color, color_outer: Color, center: Vector2, radius_outer: float, radius_inner: float):
+        # Small circles can affort 20 steps, for bigger circles,
+        # add enough steps that the largest line segment is 30 world units
+        steps = min(100, max(20, (radius_outer * 2 * math.pi) / 30))
+
+        vertices = []
+        colors = []
+        for angle in range(0, 361, int(360 / steps)):
+            colors.append(color_inner)
+            vertices.append(center + Vector2(radius_inner, 0).rotate(angle))
+            colors.append(color_outer)
+            vertices.append(center + Vector2(radius_outer, 0).rotate(angle))
+
+        # Close the triangle strip by connecting to the starting point)
+        colors.append(colors[0])
+        vertices.append(vertices[0])
+
+        # break triangle strip (duplicate first and last vertex -> degenerate triangle)
+        vertices.append(vertices[-1])
+        vertices.insert(0, vertices[0])
+
+        self._separately_colored_vertices(GL_TRIANGLE_STRIP, colors, vertices)
+
     def textured_circle(self, sprite: ImageSprite, center: Vector2, radius: float):
         texture = sprite._get_texture()
 
@@ -645,6 +680,13 @@ class RenderContext:
             self.queue[key] = DrawColoredVerticesTask(mode)
 
         self.queue[key].append(color, vertices, self.modelview_matrix_stack.apply)
+
+    def _separately_colored_vertices(self, mode: int, colors: [Color], vertices: [Vector2], *, z_layer: int = 0):
+        key = (z_layer, mode)
+        if key not in self.queue:
+            self.queue[key] = DrawColoredVerticesTask(mode)
+
+        self.queue[key].append_separate(colors, vertices, self.modelview_matrix_stack.apply)
 
     def flush(self):
         for (z_layer, *key_args), task in sorted(self.queue.items(), key=lambda kv: kv[0][0]):
@@ -1546,6 +1588,14 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
     def draw_scene(self, ctx, *, bg_color: Color, details: bool, visible_rect: Rect):
         ctx.clear(bg_color)
+
+        atmosphere_color_ground = Color(30, 60, 150)
+        atmosphere_color_sky = Color(atmosphere_color_ground)
+        atmosphere_color_sky.a = 0
+
+        ctx.donut(atmosphere_color_ground, atmosphere_color_sky, self.planet.position,
+                  self.planet.radius, self.planet.radius + self.planet.atmosphere_height)
+        ctx.flush()
 
         if details:
             for sector in self.sectors:
