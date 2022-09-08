@@ -1079,7 +1079,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         for plant in self.plants:
             plant.draw(ctx)
             if plant.aabb is not None:
-                self.game.debug_aabb.append((LABEL_PLANT, Color(0, 128, 128), plant.aabb, plant, CLICK_PRIORITY_PLANT))
+                self.game.debug_aabb.append((f"{LABEL_PLANT} ({plant.health:.0f}%)", Color(0, 128, 128), plant.aabb, plant, CLICK_PRIORITY_PLANT))
                 if self.aabb is None:
                     self.aabb = Rect(plant.aabb)
                 else:
