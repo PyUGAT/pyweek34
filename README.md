@@ -10,7 +10,7 @@ PyUGAT's project repository for PyWeek 34.
 To play, install the requirements as outlined below and run
 
 ```console
-python plants.py
+python run_game.py
 ```
 
 If you get a libGL error and use conda for package management,
@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 You want to automatically restart the game after a change?
 
 ```console
-ls plants.py | entr -r python plants.py
+ls run_game.py | entr -r python run_game.py
 ```
 
 Adjust `ls` argument to watch for other changes as well.
