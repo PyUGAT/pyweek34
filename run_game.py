@@ -530,7 +530,8 @@ class RenderContext:
 
         self.setup_matrices(left, right, bottom, top)
 
-        min_zoom = min(self.width, self.height) / ((planet.radius + planet.atmosphere_height) * 2)
+        # Adjust minimum zoom factor (used for the minimap display, i.e. fully zoomed out)
+        min_zoom = min(self.width, self.height) / ((planet.radius + planet.atmosphere_height) * 2.5)
 
         factor = min_zoom + (1.0 - min_zoom) * (1 - (1 - zoom))
 
