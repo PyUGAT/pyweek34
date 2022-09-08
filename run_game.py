@@ -866,7 +866,7 @@ class Planet(IDrawable):
 
 
 class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
-    AABB_PADDING_PX = 20
+    AABB_PADDING_PX = 10
     CURSOR = "hunt"
     FLYING_SPEED_CARRYING = 1
     FLYING_SPEED_NON_CARRYING = 3
@@ -965,6 +965,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
 
         if not self.game.drawing_minimap:  # insert check that fly is close enough to planet
             self.aabb = aabb_from_points([ctx.transform_to_screenspace(p) for p in corners])
+            self.aabb = self.aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
 
         if self.aabb is not None:
             self.game.debug_aabb.insert(0, (LABEL_FLY, Color(255, 0, 0), self.aabb, self, CLICK_PRIORITY_FLY))
