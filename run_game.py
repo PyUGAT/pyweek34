@@ -1002,7 +1002,8 @@ class Spaceship(IUpdateReceiver, IDrawable):
     def add_tomato(self):
         self.collected_tomatoes += 1
         if self.collected_tomatoes == self.TOMATO_TO_FLY:
-            self.add_fly()
+            # FIXME??
+            #self.add_fly()
             self.collected_tomatoes = 0
 
     def add_fly(self):
