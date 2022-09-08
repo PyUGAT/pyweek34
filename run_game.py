@@ -1135,8 +1135,8 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
         for plant in self.plants:
             plant.draw(ctx)
-            if plant.aabb is not None:
-                self.game.debug_aabb.append((f"{LABEL_PLANT} ({plant.health:.0f}%)", Color(0, 128, 128), plant.aabb, plant, CLICK_PRIORITY_PLANT))
+            if plant.root_aabb is not None:
+                self.game.debug_aabb.append((f"{LABEL_PLANT} ({plant.health:.0f}%)", Color(0, 128, 128), plant.root_aabb, plant, CLICK_PRIORITY_PLANT))
                 if self.aabb is None:
                     self.aabb = Rect(plant.aabb)
                 else:
@@ -1147,7 +1147,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
 
 class Plant(IUpdateReceiver, IClickReceiver):
-    AABB_PADDING_PX = 100
+    AABB_PADDING_PX = 40
     CURSOR = "cut"
 
     def __init__(self, sector: Sector, planet: Planet, position: PlanetSurfaceCoordinates, fertility, artwork: Artwork):
@@ -1161,6 +1161,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.need_aabb = True
         self.aabb_points = []
         self.aabb = None
+        self.root_aabb = None
 
         self.growth = 0
         self.health = 100
@@ -1212,6 +1213,8 @@ class Plant(IUpdateReceiver, IClickReceiver):
         if self.need_aabb and self.aabb_points:
             self.aabb = aabb_from_points(self.aabb_points)
             self.aabb = self.aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
+            self.root_aabb = aabb_from_points(self.aabb_points[:1])
+            self.root_aabb = self.root_aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
             self.aabb_points = []
             self.need_aabb = False
 
