@@ -228,7 +228,7 @@ class Artwork:
         self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
         self.rocks = [resources.sprite(f'rock{num}.png') for num in (1, 2, )]
         self.staengel = resources.sprite('staengel.png')
-        self.planet = resources.sprite('mars.jpg')
+        self.planet = resources.sprite('mars.png')
         self.spaceship = resources.sprite('spaceship.png')
 
         # TODO: Use animated cursors
