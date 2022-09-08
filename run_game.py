@@ -901,6 +901,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
 
     def clicked(self):
         # TODO: Add score, prevent player from clicking if fly is located too far out in space
+        # Also, to simplify matters, make fruitfly with tomato invincible ;)
         is_fly_close_enough_to_surface = True
         if is_fly_close_enough_to_surface:
             print('Brzzzz... you hit a fly')
@@ -920,6 +921,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
                 # ka'ching!
                 self.carrying_fruit = False
                 self.returning_to_spaceship = False
+                self.spaceship.add_tomato()
         else:
             if self.roaming_target != self.spaceship:
                 fruit = self.roaming_target
@@ -981,9 +983,14 @@ class Spaceship(IUpdateReceiver, IDrawable):
     #ELEVATION_BEGIN = 600
     ELEVATION_DOWN = 300
 
+    BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500
+    MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = 100 if CLIARGS.fast else 1000
+    TOMATO_TO_FLY = 1  # for 1 tomato the spaceship generates x flies
+
     def __init__(self, game, planet, artwork):
         self.game = game
         self.planet = planet
+        self.artwork = artwork
         self.sprite = artwork.get_spaceship()
         self.target_sector = self.pick_target_sector()
         self.near_target_sector = False
@@ -991,10 +998,24 @@ class Spaceship(IUpdateReceiver, IDrawable):
         self.target_coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_DOWN)
         self.ticks = 0
         self.flies = []
+        self.collected_tomatoes = 0
 
-        num_flies = 2
-        for i in range(num_flies):
-            self.flies.append(FruitFly(game, self, artwork, i / num_flies))
+        self.breed_flies()
+
+    def add_tomato(self):
+        self.collected_tomatoes += 1
+        if self.collected_tomatoes == self.TOMATO_TO_FLY:
+            self.add_fly()
+            self.collected_tomatoes = 0
+
+    def add_fly(self):
+        self.flies.append(FruitFly(self.game, self, self.artwork, random.uniform(0, 2*math.pi)))
+
+    def breed_flies(self):
+        min_num_flies = 2
+        flies_to_add = min_num_flies - len(self.flies)
+        for _ in range(flies_to_add):
+            self.add_fly()
 
     def get_available_fruit(self):
         for fruit in self.target_sector.ripe_fruits:
@@ -1008,8 +1029,8 @@ class Spaceship(IUpdateReceiver, IDrawable):
                                                for fly in self.flies)
 
     def pick_target_sector(self):
-        # for debugging
-        #return self.game.sectors[0]
+        if CLIARGS.debug:
+            return self.game.sectors[0]
         return random.choice(self.game.sectors)
 
     def get_world_position(self):
@@ -1018,7 +1039,10 @@ class Spaceship(IUpdateReceiver, IDrawable):
     def update(self):
         self.ticks += 1
 
-        if self.ticks % 1000 == 0 and self.current_sector_cleared():
+        if self.is_time_to_breed_flies():
+            self.breed_flies()
+
+        if self.is_time_to_move_to_other_sector() and self.current_sector_cleared():
             # pick another sector
             self.target_sector = self.pick_target_sector()
 
@@ -1033,6 +1057,12 @@ class Spaceship(IUpdateReceiver, IDrawable):
         for fly in self.flies:
             fly.update()
 
+    def is_time_to_breed_flies(self):
+        return self.ticks % self.BREEDING_EVERY_N_TICKS == 0
+
+    def is_time_to_move_to_other_sector(self):
+        return self.ticks % self.MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS == 0
+
     def draw(self, ctx):
         scale_up = 1 + self.game.get_zoom_adjustment()
 
@@ -1044,7 +1074,6 @@ class Spaceship(IUpdateReceiver, IDrawable):
 
         for fly in self.flies:
             fly.draw(ctx)
-
 
 
 class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
