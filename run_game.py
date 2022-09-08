@@ -220,10 +220,10 @@ class Artwork:
     def __init__(self, resources: ResourceManager):
         # images
         self.tomato = [resources.sprite(filename) for filename in (
-            'tomato2-fresh.png',
-            'tomato2-yellow.png',
-            'tomato2-ripe.png',
-            'tomato2-bad.png',
+            'tomato-fresh.png',
+            'tomato-yellow.png',
+            'tomato-ripe.png',
+            'tomato-bad.png',
         )]
         self.leaves = [resources.sprite(f'leaf{num}.png') for num in (1, 2, 3)]
         self.rocks = [resources.sprite(f'rock{num}.png') for num in (1, 2, )]
