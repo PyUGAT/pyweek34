@@ -764,6 +764,13 @@ class Branch(IClickReceiver):
         # TODO: Add score (check fruit_rotten first!)
         if self.has_fruit:
             self.has_fruit = False
+
+            # shake the plant
+            if self.plant.wind_amplitude <= 0:
+                self.plant.wind_amplitude = 90
+            else:
+                self.plant.wind_amplitude = -90
+
             self.plant.artwork.get_random_pick_sound().play()  # Claus-TBD: artwork from plant
             return True
 
@@ -830,6 +837,7 @@ class Branch(IClickReceiver):
 
         # angle added due to wind
         wind_angle = 10*math.sin(self.plant.wind_phase + self.plant.wind_speed * ctx.now)/max(1, 5-self.depth)
+        wind_angle += (self.plant.wind_amplitude/10)*math.sin(ctx.now*5)
 
         direction = Vector2(0, -self.length).rotate(angle + wind_angle)
 
@@ -1265,6 +1273,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
 
         self.wind_phase = random.uniform(0, 2*math.pi)
         self.wind_speed = random.uniform(0.9, 1.3)
+        self.wind_amplitude = 0
 
         length = random.uniform(100, 500)*(0.5+0.5*self.fertility/100) / 2
 
@@ -1293,6 +1302,12 @@ class Plant(IUpdateReceiver, IClickReceiver):
             self.health -= self.sector.rotting_speed
             self.health = max(0, self.health)
             self.need_aabb = True
+
+        if self.wind_amplitude > 0:
+            self.wind_amplitude -= 1
+        elif self.wind_amplitude < 0:
+            self.wind_amplitude += 1
+
         self.root.update()
 
     def draw(self, ctx):
