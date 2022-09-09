@@ -7,7 +7,13 @@ PyUGAT's project repository for PyWeek 34.
 
 ## Play
 
-To play, install the requirements as outlined below and run
+To play, install the requirements with
+
+```console
+python -m pip install -r requirements.txt
+```
+
+then run the game with
 
 ```console
 python run_game.py
