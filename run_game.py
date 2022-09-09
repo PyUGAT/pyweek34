@@ -47,15 +47,15 @@ CLIARGS = parser.parse_args()
 
 
 class ImportantParameterAffectingGameplay:
-    GAMEOVER_THRESHOLD_FLIES_WIN = 10 if CLIARGS.fast else 20
-    GAMEOVER_THRESHOLD_PLAYER_WINS = 2 if CLIARGS.fast else 20
-    BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500
-    MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = 100 if CLIARGS.fast else 1000
-    TOMATO_TO_FLY = 1  # for 1 tomato the spaceship generates x flies
-    MIN_NUM_FLIES = 2
-    MAX_NUM_FLIES = 4
-    GROWTH_SPEED = 100 if CLIARGS.fast else 3
-    FERTILITY = (10, 50)
+    GAMEOVER_THRESHOLD_FLIES_WIN = 10 if CLIARGS.fast else 20  # Flies win when they steal N tomatoes
+    GAMEOVER_THRESHOLD_PLAYER_WINS = 2 if CLIARGS.fast else 20  # Player wins when harvested N tomatoes
+    BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500  # Reproduction interval to maintain MIN_NUM_FLIES, increase/decrease value to slow down/seep up reproduction
+    MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = 100 if CLIARGS.fast else 1000  # How often the spaceship changes location, increase/decrease value to decrease/increase changes
+    TOMATO_TO_FLY = 1  # N collected tomatoes result in 1 fly; min value 1, increase to slow down reproduction
+    MIN_NUM_FLIES = 2  # There are at least N flies
+    MAX_NUM_FLIES = 4  # There are at most N flies
+    GROWTH_SPEED = 100 if CLIARGS.fast else 3  # How fast the plants grow, increase/decrease value to speed up/slow down growth
+    FERTILITY = (10, 50)  # Increase/decrease values for stronger/weaker plants (with more/less tomatoes)
 
 
 def multiply_3x3(a, b):
