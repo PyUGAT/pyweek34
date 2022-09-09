@@ -15,6 +15,12 @@ from pygame.locals import *
 from pygame.math import Vector2
 from pygame.mixer import Sound
 
+CREDITS = """
+        A PyWeek#34 entry by the Python User Group in Vienna, Austria (https://pyug.at/).
+        Authors: Christian Knittl-Frank, Paul Reiter, Claus Aichinger and Thomas Perl.
+        See ARTWORK.md for a list of third party sound and graphic artwork used in this game.
+"""
+
 HERE = os.path.dirname(__file__) or "."
 
 LEFT_MOUSE_BUTTON = 1
@@ -2033,7 +2039,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
     def tick(self):
         super().process_events(mouse=self.gui, update=self, gamestate=self)
         if self.is_startup:
-            self.render_startup()
+            self.render_scene(startup=True)
         elif self.is_gameover_flies_win:
             self.render_gameover_flies_win()
         elif self.is_gameover_player_wins:
@@ -2129,9 +2135,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         ctx.flush()
 
-    def render_startup(self):
-        self._draw_lines(textwrap.dedent(f"""
-        Commander! We need your help!
+    def render_startup(self, ctx):
+        self._draw_lines_over(ctx, textwrap.dedent(f"""
+        Commander, we need your help!
         Our sensors detected an incoming flyship.
         Fend them off and bring in our harvest before it is too late!
 
@@ -2147,14 +2153,19 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             Click on the roots of plants to cut them off and let a new one sprout.
             A plant will only grow tomatoes once! Cut it off to grow a new one.
 
-        Press SPACEBAR to start.
+        {CREDITS}
+
+            Press SPACEBAR to start, control with the mouse. SPACEBAR to toggle pause.
         """).splitlines())
 
     def render_gameover_flies_win(self):
         self._draw_lines(textwrap.dedent(f"""
         Oh nooo! It's too late!
-        They got all the !#@&/ they need...
+        They got all the space tomatoes they need...
         Prepare for evacuation immediately!
+
+            But also, thanks for playing our little game -- try again, maybe?
+        {CREDITS}
         """).splitlines())
 
     def render_gameover_player_wins(self):
@@ -2162,12 +2173,26 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         Oh yesss! You did it!
         We finally have enough tomatoes to ketchdown the flies.
         Good job!
+
+            And thanks for playing our little game, hope you enjoyed it :)
+        {CREDITS}
         """).splitlines())
+
+    def _draw_lines_over(self, ctx, lines):
+        initial_position = 50
+        offset = 25
+        for i, line in enumerate(lines):
+            ctx.text(
+                line,
+                Color(255, 80, 30) if line.startswith('    ') else Color(30, 255, 180),
+                Vector2(100, initial_position + i * offset),
+            )
+        ctx.flush()
 
     def _draw_lines(self, lines):
         with self.renderer as ctx:
             ctx.clear(Color(0, 0, 0))
-            initial_position = 200
+            initial_position = 100
             offset = 25
             for i, line in enumerate(lines):
                 ctx.text(
@@ -2177,7 +2202,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 )
             ctx.flush()
 
-    def render_scene(self, *, paused=False):
+    def render_scene(self, *, paused=False, startup=False):
         with self.renderer as ctx:
             visible_rect = Rect(0, 0, self.width, self.height)
 
@@ -2278,11 +2303,16 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             )
             ctx.flush()
 
-            if paused:
+            if paused or startup:
                 ctx.rect(Color(0, 0, 0, 200), Rect(0, 0, self.width, self.height))
                 ctx.flush()
+
+            if paused:
                 ctx.text_centered("Game Paused - Press SPACEBAR to continue", Color(255, 255, 255))
                 ctx.flush()
+
+            if startup:
+                self.render_startup(ctx)
 
 
 def main():
