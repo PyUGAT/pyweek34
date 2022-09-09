@@ -1866,21 +1866,24 @@ class Window:
     def process_events(self, *, mouse: IMouseReceiver, update: IUpdateReceiver):
         for event in pygame.event.get():
             if event.type == QUIT:
-                self.running = False
-                return
-            elif event.type == MOUSEBUTTONDOWN and event.button == LEFT_MOUSE_BUTTON:
-                mouse.mousedown(event.pos)
-            elif event.type == MOUSEMOTION and event.buttons:
-                mouse.mousemove(event.pos)
-            elif event.type == MOUSEBUTTONUP and event.button == LEFT_MOUSE_BUTTON:
-                mouse.mouseup(event.pos)
-            elif event.type == MOUSEWHEEL:
-                mouse.mousewheel(event.x, event.y, event.flipped)
-            elif event.type == self.EVENT_TYPE_UPDATE:
-                update.update()
+                self.quit()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                self.running = not self.running
+            if self.running:
+                if event.type == MOUSEBUTTONDOWN and event.button == LEFT_MOUSE_BUTTON:
+                    mouse.mousedown(event.pos)
+                elif event.type == MOUSEMOTION and event.buttons:
+                    mouse.mousemove(event.pos)
+                elif event.type == MOUSEBUTTONUP and event.button == LEFT_MOUSE_BUTTON:
+                    mouse.mouseup(event.pos)
+                elif event.type == MOUSEWHEEL:
+                    mouse.mousewheel(event.x, event.y, event.flipped)
+                elif event.type == self.EVENT_TYPE_UPDATE:
+                    update.update()
 
     def quit(self):
         pygame.quit()
+        quit()
 
 
 class Minimap(IClickReceiver):
@@ -1963,17 +1966,20 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         return 0
 
-    def process_events(self):
+    def tick(self):
         super().process_events(mouse=self.gui, update=self)
+        if self.running:
+            dy = self.gui.wheel_sum.y
+            if dy != 0:
+                self.invalidate_aabb()
+            self.rotation_angle_degrees += dy * (30000 / self.planet.get_circumfence())
+            self.rotation_angle_degrees %= 360
+            self.gui.wheel_sum.y = 0
 
-        dy = self.gui.wheel_sum.y
-        if dy != 0:
-            self.invalidate_aabb()
-        self.rotation_angle_degrees += dy * (30000 / self.planet.get_circumfence())
-        self.rotation_angle_degrees %= 360
-        self.gui.wheel_sum.y = 0
-
-        self.set_subtitle(f"{self.renderer.fps:.0f} FPS")
+            self.set_subtitle(f"{self.renderer.fps:.0f} FPS")
+            self.render_scene()
+        else:
+            pygame.time.wait(1000 // 120)
 
     def invalidate_aabb(self):
         for sector in self.sectors:
@@ -2160,11 +2166,8 @@ def main():
 
     game = Game()
 
-    while game.running:
-        game.process_events()
-        game.render_scene()
-
-    game.quit()
+    while True:
+        game.tick()
 
 
 if __name__ == "__main__":
