@@ -43,6 +43,8 @@ parser.add_argument(
 )
 CLIARGS = parser.parse_args()
 
+GAMEOVER_THRESHOLD = 2 if CLIARGS.fast else 20
+
 
 def multiply_3x3(a, b):
     return array.array(
@@ -1859,18 +1861,19 @@ class Window:
         pygame.display.set_caption(title)
         pygame.font.init()
         pygame.time.set_timer(self.EVENT_TYPE_UPDATE, int(1000 / updates_per_second))
-        self.running = True
 
     def set_subtitle(self, subtitle):
         pygame.display.set_caption(f"{self.title}: {subtitle}")
 
-    def process_events(self, *, mouse: IMouseReceiver, update: IUpdateReceiver):
+    def process_events(self, *, mouse: IMouseReceiver, update: IUpdateReceiver, gamestate):
         for event in pygame.event.get():
             if event.type == QUIT:
                 self.quit()
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                self.running = not self.running
-            if self.running:
+            if gamestate.is_startup and self._is_spacebar_down(event):
+                gamestate.is_running = not gamestate.is_running
+            elif self._is_spacebar_down(event):
+                gamestate.is_running = not gamestate.is_running
+            if gamestate.is_running:
                 if event.type == MOUSEBUTTONDOWN and event.button == LEFT_MOUSE_BUTTON:
                     mouse.mousedown(event.pos)
                 elif event.type == MOUSEMOTION and event.buttons:
@@ -1881,6 +1884,9 @@ class Window:
                     mouse.mousewheel(event.x, event.y, event.flipped)
                 elif event.type == self.EVENT_TYPE_UPDATE:
                     update.update()
+
+    def _is_spacebar_down(self, event):
+        return event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
 
     def quit(self):
         pygame.quit()
@@ -1961,6 +1967,16 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             for i in range(100)
         ]
 
+        self.is_running = False
+
+    @property
+    def is_startup(self):
+        return self.spaceship.ticks == 0
+
+    @property
+    def is_gameover(self):
+        return self.spaceship.total_collected >= GAMEOVER_THRESHOLD
+
     def get_zoom_adjustment(self):
         if self.drawing_minimap:
             return 2
@@ -1968,8 +1984,12 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         return 0
 
     def tick(self):
-        super().process_events(mouse=self.gui, update=self)
-        if self.running:
+        super().process_events(mouse=self.gui, update=self, gamestate=self)
+        if self.is_startup:
+            self.render_startup()
+        elif self.is_gameover:
+            self.render_gameover()
+        elif self.is_running:
             dy = self.gui.wheel_sum.y
             if dy != 0:
                 self.invalidate_aabb()
@@ -2059,6 +2079,40 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.planet.draw(ctx)
 
         ctx.flush()
+
+    def render_startup(self):
+        message = [
+            "Commander! We need your help!",
+            "Our sensors detected an incoming flyship.",
+            "Protect our harvest before it is too late!",
+            f"If they manage to steal {GAMEOVER_THRESHOLD} !#@&/ we are all doomed...",
+            "",
+            "",
+            "Hit space to start.",
+        ]
+
+        self._draw_lines(message)
+
+    def render_gameover(self):
+        message = [
+            "Oh nooo! It's too late!",
+            "They got all the !#@&/ they need...",
+            "Prepare for evacuation immediately!",
+        ]
+        self._draw_lines(message)
+
+    def _draw_lines(self, lines):
+        with self.renderer as ctx:
+            initial_position = 300
+            offset = 25
+            for i, line in enumerate(lines):
+                ctx.text(
+                line,
+                Color(0, 255, 255),
+                Vector2(100, initial_position + i*offset),
+            )
+            ctx.flush()
+
 
     def render_scene(self):
         with self.renderer as ctx:
