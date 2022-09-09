@@ -43,8 +43,14 @@ parser.add_argument(
 )
 CLIARGS = parser.parse_args()
 
-GAMEOVER_THRESHOLD = 2 if CLIARGS.fast else 20
-
+class ImportantParameterAffectingGameplay:
+    GAMEOVER_THRESHOLD = 10 if CLIARGS.fast else 20
+    BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500
+    MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = 100 if CLIARGS.fast else 1000
+    TOMATO_TO_FLY = 1  # for 1 tomato the spaceship generates x flies
+    MIN_NUM_FLIES = 2
+    MAX_FLIES = 4
+    GROWTH_SPEED = 100 if CLIARGS.fast else 3
 
 def multiply_3x3(a, b):
     return array.array(
@@ -1330,10 +1336,6 @@ class Spaceship(IUpdateReceiver, IDrawable):
     # ELEVATION_BEGIN = 600
     ELEVATION_DOWN = 300
 
-    BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500
-    MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = 100 if CLIARGS.fast else 1000
-    TOMATO_TO_FLY = 1  # for 1 tomato the spaceship generates x flies
-
     def __init__(self, game, planet, artwork):
         self.game = game
         self.planet = planet
@@ -1349,30 +1351,28 @@ class Spaceship(IUpdateReceiver, IDrawable):
         )
         self.ticks = 0
         self.flies = []
-        self.collected_tomatoes = 0
-        self.total_collected = 0
-
         self.dead_flies = []
 
-        self.breed_flies()
+        self.total_collected_tomatoes = 0
+        self.tomato_to_fly_counter = 0
+
+        self.breed_flies_if_needed()
 
     def add_tomato(self):
-        self.collected_tomatoes += 1
-        self.total_collected += 1
-        if self.collected_tomatoes == self.TOMATO_TO_FLY:
-            # FIXME??
-            # self.add_fly()
-            self.collected_tomatoes = 0
+        self.total_collected_tomatoes += 1
+        self.tomato_to_fly_counter += 1
+        if self.tomato_to_fly_counter == ImportantParameterAffectingGameplay.TOMATO_TO_FLY and len(self.flies) < ImportantParameterAffectingGameplay.MAX_FLIES:
+            self.add_fly()
+            self.tomato_to_fly_counter = 0
 
     def add_fly(self):
         self.flies.append(
             FruitFly(self.game, self, self.artwork, random.uniform(0, 2 * math.pi))
         )
 
-    def breed_flies(self):
-        min_num_flies = 2
-        flies_to_add = min_num_flies - len(self.flies)
-        for _ in range(flies_to_add):
+    def breed_flies_if_needed(self):
+        flies_to_add = ImportantParameterAffectingGameplay.MIN_NUM_FLIES - len(self.flies)
+        for _ in range(flies_to_add):  # we implicitly use that range of a negative value is an empty sequence
             self.add_fly()
 
     def get_available_fruit(self):
@@ -1400,7 +1400,7 @@ class Spaceship(IUpdateReceiver, IDrawable):
         self.ticks += 1
 
         if self.is_time_to_breed_flies():
-            self.breed_flies()
+            self.breed_flies_if_needed()
 
         if self.is_time_to_move_to_other_sector() and self.current_sector_cleared():
             # pick another sector
@@ -1433,10 +1433,10 @@ class Spaceship(IUpdateReceiver, IDrawable):
         ]
 
     def is_time_to_breed_flies(self):
-        return self.ticks % self.BREEDING_EVERY_N_TICKS == 0
+        return self.ticks % ImportantParameterAffectingGameplay.BREEDING_EVERY_N_TICKS == 0
 
     def is_time_to_move_to_other_sector(self):
-        return self.ticks % self.MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS == 0
+        return self.ticks % ImportantParameterAffectingGameplay.MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS == 0
 
     def draw(self, ctx):
         scale_up = 1 + self.game.get_zoom_adjustment()
@@ -1468,7 +1468,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
             self.number_of_plants
         ] * 3
         self.fertility = int(random.uniform(10, 50))
-        growth_speed = 100 if CLIARGS.fast else 3
+        growth_speed = ImportantParameterAffectingGameplay.GROWTH_SPEED
         self.growth_speed = random.uniform(0.02, 0.06) * growth_speed
         self.rotting_speed = random.uniform(0.01, 0.02)
         self.plants = []
@@ -1975,7 +1975,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
     @property
     def is_gameover(self):
-        return self.spaceship.total_collected >= GAMEOVER_THRESHOLD
+        return self.spaceship.total_collected_tomatoes >= ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD
 
     def get_zoom_adjustment(self):
         if self.drawing_minimap:
@@ -2084,8 +2084,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         message = [
             "Commander! We need your help!",
             "Our sensors detected an incoming flyship.",
-            "Protect our harvest before it is too late!",
-            f"If they manage to steal {GAMEOVER_THRESHOLD} !#@&/ we are all doomed...",
+            "Fend them off and bring in our harvest before it is too late!",
+            "",
+            f"If they manage to steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD} !#@&/ we are all doomed...",
             "",
             "",
             "Hit space to start.",
@@ -2207,7 +2208,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 10),
             )
 
-            text = f"Stolen: {self.spaceship.total_collected}"
+            text = f"Stolen: {self.spaceship.total_collected_tomatoes}"
             ctx.text(
                 text,
                 Color(0, 255, 255),
