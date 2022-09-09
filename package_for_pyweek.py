@@ -11,15 +11,34 @@ import subprocess
 
 
 # Configuration
-PACKAGE_NAME = 'TheRedPlanted'
+PACKAGE_NAME = 'RedPlanted'
 RESOURCES = [
     'data',
     'run_game.py',
     'requirements.txt',
-    'README.md',
 ]
 HERE = os.path.dirname(__file__)
 DST = 'sdist'
+README = """# Red Planted
+
+## Installation
+
+Using Python 3
+
+```console
+python -m pip install -r requirements.txt
+```
+
+If you get a libGL error and use conda for package management,
+you can solve it within your environment by `conda install -c conda-forge libstdcxx-ng`.
+
+
+## Play
+
+```console
+python run_game.py
+```
+"""
 
 target_folder = Path(HERE) / DST / PACKAGE_NAME
 zip_archive = Path(HERE) / DST / (PACKAGE_NAME + '.zip')
@@ -39,6 +58,10 @@ for resource in RESOURCES:
         shutil.copytree(src, dst, dirs_exist_ok=True)
     else:
         shutil.copy(src, dst)
+
+# write README
+readme = target_folder / 'README.md'
+readme.write_text(README)
 
 # run game
 print('Will try to run the game now. Check if everything works and then close the window.')
