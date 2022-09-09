@@ -1218,9 +1218,10 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
             )
             if did_arrive:
                 # ka'ching!
-                self.carrying_fruit = False
                 self.returning_to_spaceship = False
-                self.spaceship.add_tomato()
+                if self.carrying_fruit:
+                    self.carrying_fruit = False
+                    self.spaceship.add_tomato()
         else:
             if self.roaming_target != self.spaceship:
                 fruit = self.roaming_target
