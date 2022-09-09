@@ -7,6 +7,7 @@ import math
 import os
 import random
 import time
+import textwrap
 
 import pygame
 from OpenGL.GL import *
@@ -2115,42 +2116,36 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         ctx.flush()
 
     def render_startup(self):
-        message = [
-            "Commander! We need your help!",
-            "Our sensors detected an incoming flyship.",
-            "Fend them off and bring in our harvest before it is too late!",
-            "",
-            f"Our spies tell us the only need to steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} !#@&/ before are all doomed...",
-            "",
-            f"Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} !#@&/ and we will ketchdown the flies in this quadrant!"
-            "",
-            "",
-            "",
-            "Hit space to start.",
-        ]
+        self._draw_lines(textwrap.dedent(f"""
+        Commander! We need your help!
+        Our sensors detected an incoming flyship.
+        Fend them off and bring in our harvest before it is too late!
 
-        self._draw_lines(message)
+        Our spies tell us the only need to steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} !#@&/ before are all doomed...
+
+        Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} !#@&/ and we will ketchdown the flies in this quadrant!
+
+        Hit space to start.
+        """).splitlines())
 
     def render_gameover_flies_win(self):
-        message = [
-            "Oh nooo! It's too late!",
-            "They got all the !#@&/ they need...",
-            "Prepare for evacuation immediately!",
-        ]
-        self._draw_lines(message)
+        self._draw_lines(textwrap.dedent(f"""
+        Oh nooo! It's too late!
+        They got all the !#@&/ they need...
+        Prepare for evacuation immediately!
+        """).splitlines())
 
     def render_gameover_player_wins(self):
-        message = [
-            "Oh yesss! You did it!",
-            "We finally have enough tomatoes to ketchdown the flies.",
-            "Good job!",
-        ]
-        self._draw_lines(message)
+        self._draw_lines(textwrap.dedent(f"""
+        Oh yesss! You did it!
+        We finally have enough tomatoes to ketchdown the flies.
+        Good job!
+        """).splitlines())
 
     def _draw_lines(self, lines):
         with self.renderer as ctx:
             ctx.clear(Color(0, 0, 0))
-            initial_position = 300
+            initial_position = 200
             offset = 25
             for i, line in enumerate(lines):
                 ctx.text(
