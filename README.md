@@ -23,8 +23,16 @@ Using your favorite tool to create an environment, do something
 equivalent to
 
 ```console
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -r dev-requirements.txt
 ```
+
+You want to update the requirements?
+
+Add/Remove entries from `requirements.in` or `dev-requirements.in`, run
+`pip-compile requirements.in` or `pip-compile dev-requirements.in` to regenerate the
+actual requirements txt files and finally run
+`pip-sync requirements.txt dev-requirements.txt`
+to update the installed packages in your virtual environment.
 
 You want to automatically restart the game after a change?
 
