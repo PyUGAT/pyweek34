@@ -44,7 +44,8 @@ parser.add_argument(
 CLIARGS = parser.parse_args()
 
 class ImportantParameterAffectingGameplay:
-    GAMEOVER_THRESHOLD = 10 if CLIARGS.fast else 20
+    GAMEOVER_THRESHOLD_FLIES_WIN = 10 if CLIARGS.fast else 20
+    GAMEOVER_THRESHOLD_PLAYER_WINS = 2 if CLIARGS.fast else 20
     BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500
     MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = 100 if CLIARGS.fast else 1000
     TOMATO_TO_FLY = 1  # for 1 tomato the spaceship generates x flies
@@ -1974,8 +1975,12 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         return self.spaceship.ticks == 0
 
     @property
-    def is_gameover(self):
-        return self.spaceship.total_collected_tomatoes >= ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD
+    def is_gameover_flies_win(self):
+        return self.spaceship.total_collected_tomatoes >= ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN
+
+    @property
+    def is_gameover_player_wins(self):
+        return  self.tomato_score >= ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS
 
     def get_zoom_adjustment(self):
         if self.drawing_minimap:
@@ -1987,8 +1992,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         super().process_events(mouse=self.gui, update=self, gamestate=self)
         if self.is_startup:
             self.render_startup()
-        elif self.is_gameover:
-            self.render_gameover()
+        elif self.is_gameover_flies_win:
+            self.render_gameover_flies_win()
+        elif self.is_gameover_player_wins:
+            self.render_gameover_player_wins()
         elif self.is_running:
             dy = self.gui.wheel_sum.y
             if dy != 0:
@@ -2086,7 +2093,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             "Our sensors detected an incoming flyship.",
             "Fend them off and bring in our harvest before it is too late!",
             "",
-            f"If they manage to steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD} !#@&/ we are all doomed...",
+            f"Our spies tell us the only need to steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} !#@&/ before are all doomed...",
+            "",
+            f"Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} !#@&/ and we will ketchdown the flies in this quadrant!"
+            "",
             "",
             "",
             "Hit space to start.",
@@ -2094,11 +2104,19 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self._draw_lines(message)
 
-    def render_gameover(self):
+    def render_gameover_flies_win(self):
         message = [
             "Oh nooo! It's too late!",
             "They got all the !#@&/ they need...",
             "Prepare for evacuation immediately!",
+        ]
+        self._draw_lines(message)
+
+    def render_gameover_player_wins(self):
+        message = [
+            "Oh yesss! You did it!",
+            "We finally have enough tomatoes to ketchdown the flies.",
+            "Good job!",
         ]
         self._draw_lines(message)
 
