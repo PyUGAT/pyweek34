@@ -1,29 +1,30 @@
 import argparse
-import pygame
-import random
-import time
-import math
-import os
 import array
 import ctypes
+import math
+import os
+import random
+import time
 
+import pygame
+from OpenGL.GL import *
 from pygame.locals import *
 from pygame.math import Vector2
 from pygame.mixer import Sound
 
-from OpenGL.GL import *
-
-HERE = os.path.dirname(__file__) or '.'
+HERE = os.path.dirname(__file__) or "."
 
 LEFT_MOUSE_BUTTON = 1
 MIDDLE_MOUSE_BUTTON = 2
 RIGHT_MOUSE_BUTTON = 3
 
-(CLICK_PRIORITY_FRUIT,
- CLICK_PRIORITY_PLANT,
- CLICK_PRIORITY_FLY,
- CLICK_PRIORITY_SECTOR,
- CLICK_PRIORITY_OTHER) = range(5)
+(
+    CLICK_PRIORITY_FRUIT,
+    CLICK_PRIORITY_PLANT,
+    CLICK_PRIORITY_FLY,
+    CLICK_PRIORITY_SECTOR,
+    CLICK_PRIORITY_OTHER,
+) = range(5)
 
 LABEL_FRUIT = "fruit"
 LABEL_MINIMAP = "minimap"
@@ -38,84 +39,143 @@ parser.add_argument(
     help="Show debug info",
 )
 parser.add_argument(
-    "--fast",
-    action="store_true",
-    help="Fast growth to accelerate startup"
+    "--fast", action="store_true", help="Fast growth to accelerate startup"
 )
 CLIARGS = parser.parse_args()
 
 
 def multiply_3x3(a, b):
-    return array.array('f', (
-        a[0]*b[0] + a[1]*b[3] + a[2]*b[6],
-        a[0]*b[1] + a[1]*b[4] + a[2]*b[7],
-        a[0]*b[2] + a[1]*b[5] + a[2]*b[8],
+    return array.array(
+        "f",
+        (
+            a[0] * b[0] + a[1] * b[3] + a[2] * b[6],
+            a[0] * b[1] + a[1] * b[4] + a[2] * b[7],
+            a[0] * b[2] + a[1] * b[5] + a[2] * b[8],
+            a[3] * b[0] + a[4] * b[3] + a[5] * b[6],
+            a[3] * b[1] + a[4] * b[4] + a[5] * b[7],
+            a[3] * b[2] + a[4] * b[5] + a[5] * b[8],
+            a[6] * b[0] + a[7] * b[3] + a[8] * b[6],
+            a[6] * b[1] + a[7] * b[4] + a[8] * b[7],
+            a[6] * b[2] + a[7] * b[5] + a[8] * b[8],
+        ),
+    )
 
-        a[3]*b[0] + a[4]*b[3] + a[5]*b[6],
-        a[3]*b[1] + a[4]*b[4] + a[5]*b[7],
-        a[3]*b[2] + a[4]*b[5] + a[5]*b[8],
-
-        a[6]*b[0] + a[7]*b[3] + a[8]*b[6],
-        a[6]*b[1] + a[7]*b[4] + a[8]*b[7],
-        a[6]*b[2] + a[7]*b[5] + a[8]*b[8],
-    ))
 
 class Matrix3x3:
     def __init__(self, initial=None):
-        self.m = array.array('f', initial.m if initial is not None else (
-            1., 0., 0.,
-            0., 1., 0.,
-            0., 0., 1.,
-        ))
+        self.m = array.array(
+            "f",
+            initial.m
+            if initial is not None
+            else (
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+            ),
+        )
 
     def apply(self, v):
         m = self.m
 
-        v = (v[0], v[1], 1.)
+        v = (v[0], v[1], 1.0)
 
         v = (
-            m[0]*v[0] + m[1]*v[1] + m[2]*v[2],
-            m[3]*v[0] + m[4]*v[1] + m[5]*v[2],
-            m[6]*v[0] + m[7]*v[1] + m[8]*v[2],
+            m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+            m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+            m[6] * v[0] + m[7] * v[1] + m[8] * v[2],
         )
 
-        return (v[0]/v[2], v[1]/v[2])
+        return (v[0] / v[2], v[1] / v[2])
 
     def translate(self, x, y):
-        self.m = multiply_3x3(self.m, array.array('f', (
-            1., 0., x,
-            0., 1., y,
-            0., 0., 1.,
-        )))
+        self.m = multiply_3x3(
+            self.m,
+            array.array(
+                "f",
+                (
+                    1.0,
+                    0.0,
+                    x,
+                    0.0,
+                    1.0,
+                    y,
+                    0.0,
+                    0.0,
+                    1.0,
+                ),
+            ),
+        )
 
     def scale(self, x, y):
-        self.m = multiply_3x3(self.m, array.array('f', (
-            x,  0., 0.,
-            0., y,  0.,
-            0., 0., 1.,
-        )))
+        self.m = multiply_3x3(
+            self.m,
+            array.array(
+                "f",
+                (
+                    x,
+                    0.0,
+                    0.0,
+                    0.0,
+                    y,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                ),
+            ),
+        )
 
     def rotate(self, angle_radians):
         s = math.sin(angle_radians)
         c = math.cos(angle_radians)
 
-        self.m = multiply_3x3(self.m, array.array('f', (
-            c, -s,  0.,
-            s,  c,  0.,
-            0., 0., 1.,
-        )))
+        self.m = multiply_3x3(
+            self.m,
+            array.array(
+                "f",
+                (
+                    c,
+                    -s,
+                    0.0,
+                    s,
+                    c,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                ),
+            ),
+        )
 
     def ortho(self, left, right, bottom, top):
-        w = (right - left)
-        tx = - (right + left) / w
-        h = (top - bottom)
-        ty = - (top + bottom) / h
+        w = right - left
+        tx = -(right + left) / w
+        h = top - bottom
+        ty = -(top + bottom) / h
 
-        self.m = multiply_3x3(self.m, array.array('f', (
-            2. / w,     0., tx,
-            0.,     2. / h, ty,
-            0.,         0.,  1.,
-        )))
+        self.m = multiply_3x3(
+            self.m,
+            array.array(
+                "f",
+                (
+                    2.0 / w,
+                    0.0,
+                    tx,
+                    0.0,
+                    2.0 / h,
+                    ty,
+                    0.0,
+                    0.0,
+                    1.0,
+                ),
+            ),
+        )
 
 
 def test_matrix3x3():
@@ -123,17 +183,17 @@ def test_matrix3x3():
         return deg / 180 * math.pi
 
     test_ops = [
-        ('scale', 0.5, 2.0),
-        ('translate', 30, 40),
-        ('rotate', degrees_to_radians(-90)),
-        ('ortho', 0, 1000, 1000, 0),
+        ("scale", 0.5, 2.0),
+        ("translate", 30, 40),
+        ("rotate", degrees_to_radians(-90)),
+        ("ortho", 0, 1000, 1000, 0),
     ]
 
     for method, *args in test_ops:
         m = Matrix3x3()
         for v in ((100, 200), (0, 0)):
             getattr(m, method)(*args)
-            print(f'{v} -> {method}{tuple(args)} -> {m.apply(v)}')
+            print(f"{v} -> {method}{tuple(args)} -> {m.apply(v)}")
 
 
 class ImageSprite:
@@ -169,18 +229,42 @@ class Texture:
         self.id = glGenTextures(1)
 
         glBindTexture(GL_TEXTURE_2D, self.id)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sprite.width, sprite.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            sprite.width,
+            sprite.height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            None,
+        )
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
 
         view = sprite.img.get_buffer()
         for y in range(sprite.height):
             start = y * sprite.img.get_pitch()
-            pixeldata = view.raw[start:start+sprite.width*sprite.img.get_bytesize()]
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, sprite.width, 1, GL_BGRA, GL_UNSIGNED_BYTE, pixeldata)
+            pixeldata = view.raw[
+                start : start + sprite.width * sprite.img.get_bytesize()
+            ]
+            glTexSubImage2D(
+                GL_TEXTURE_2D,
+                0,
+                0,
+                y,
+                sprite.width,
+                1,
+                GL_BGRA,
+                GL_UNSIGNED_BYTE,
+                pixeldata,
+            )
 
         if generate_mipmaps:
             glGenerateMipmap(GL_TEXTURE_2D)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+            glTexParameteri(
+                GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR
+            )
         else:
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
 
@@ -208,47 +292,54 @@ class ResourceManager:
         return os.path.join(self.root, filename)
 
     def sprite(self, filename: str):
-        return ImageSprite.load(self.dir('image').filename(filename))
+        return ImageSprite.load(self.dir("image").filename(filename))
 
     def font(self, filename: str, point_size: int):
-        return pygame.font.Font(self.dir('font').filename(filename), point_size)
+        return pygame.font.Font(self.dir("font").filename(filename), point_size)
 
     def sound(self, filename: str):
-        return Sound(self.dir('sound').filename(filename))
+        return Sound(self.dir("sound").filename(filename))
+
 
 class Artwork:
     def __init__(self, resources: ResourceManager):
         # images
-        self.tomato = [resources.sprite(filename) for filename in (
-            'tomatopx-fresh.png',
-            'tomatopx-yellow.png',
-            'tomatopx-ripe.png',
-            'tomato-bad.png',
-        )]
-        self.leaves = [resources.sprite(f'leafpx{num}.png') for num in (1, 2, 3)]
-        self.rocks = [resources.sprite(f'rockpx{num}.png') for num in (1, 2, 3, 4)]
-        self.planet = resources.sprite('mars.png')
-        self.spaceship = resources.sprite('spaceship.png')
+        self.tomato = [
+            resources.sprite(filename)
+            for filename in (
+                "tomatopx-fresh.png",
+                "tomatopx-yellow.png",
+                "tomatopx-ripe.png",
+                "tomato-bad.png",
+            )
+        ]
+        self.leaves = [resources.sprite(f"leafpx{num}.png") for num in (1, 2, 3)]
+        self.rocks = [resources.sprite(f"rockpx{num}.png") for num in (1, 2, 3, 4)]
+        self.planet = resources.sprite("mars.png")
+        self.spaceship = resources.sprite("spaceship.png")
 
         # TODO: Use animated cursors
         self.cursors = {
             # None: ...,  # in case we also want a custom cursor if not on object
-            "cut": resources.sprite('cursor_cut2_px.png'),
-            "harvest": resources.sprite('cursor_harvest_px.png'),
-            "hunt": resources.sprite('cursor_swatter_px.png'),
+            "cut": resources.sprite("cursor_cut2_px.png"),
+            "harvest": resources.sprite("cursor_harvest_px.png"),
+            "hunt": resources.sprite("cursor_swatter_px.png"),
         }
 
         # animations (images)
-        self.fly_animation = AnimatedImageSprite([
-            resources.sprite('fly1.png'),
-            resources.sprite('fly2.png'),
-        ], delay_ms=200)
+        self.fly_animation = AnimatedImageSprite(
+            [
+                resources.sprite("fly1.png"),
+                resources.sprite("fly2.png"),
+            ],
+            delay_ms=200,
+        )
 
         # sounds
-        self.pick = [resources.sound(f'pick{num}.wav') for num in (1, )]
-        self.mowing = [resources.sound(f'mowing{num}.wav') for num in (1, 2, 3)]
-        self.slap = [resources.sound(f'slap{num}.wav') for num in (1, 2, 3)]
-        self.ripe_sound = resources.sound('ripe.wav')
+        self.pick = [resources.sound(f"pick{num}.wav") for num in (1,)]
+        self.mowing = [resources.sound(f"mowing{num}.wav") for num in (1, 2, 3)]
+        self.slap = [resources.sound(f"slap{num}.wav") for num in (1, 2, 3)]
+        self.ripe_sound = resources.sound("ripe.wav")
 
     def is_tomato_ripe(self, tomato: ImageSprite):
         return tomato == self.get_ripe_tomato()
@@ -260,7 +351,7 @@ class Artwork:
         if rotten:
             return self.tomato[-1]
 
-        return self.tomato[max(0, min(2, int(factor*2.3)))]
+        return self.tomato[max(0, min(2, int(factor * 2.3)))]
 
     def get_random_leaf(self):
         return random.choice(self.leaves)
@@ -312,7 +403,7 @@ class IDrawTask:
 class DrawSpriteTask(IDrawTask):
     def __init__(self, sprite: ImageSprite):
         self.sprite = sprite
-        self.data = array.array('f')
+        self.data = array.array("f")
 
     def append(self, position: Vector2, scale: Vector2, apply_modelview_matrix):
         if scale is None:
@@ -333,15 +424,34 @@ class DrawSpriteTask(IDrawTask):
         bl = apply_modelview_matrix(bl)
         br = apply_modelview_matrix(br)
 
-        self.data.extend((
-            0., 0., tl.x, tl.y,
-            1., 0., tr.x, tr.y,
-            1., 1., br.x, br.y,
-
-            0., 0., tl.x, tl.y,
-            1., 1., br.x, br.y,
-            0., 1., bl.x, bl.y,
-        ))
+        self.data.extend(
+            (
+                0.0,
+                0.0,
+                tl.x,
+                tl.y,
+                1.0,
+                0.0,
+                tr.x,
+                tr.y,
+                1.0,
+                1.0,
+                br.x,
+                br.y,
+                0.0,
+                0.0,
+                tl.x,
+                tl.y,
+                1.0,
+                1.0,
+                br.x,
+                br.y,
+                0.0,
+                1.0,
+                bl.x,
+                bl.y,
+            )
+        )
 
         return corners_in_modelview_space
 
@@ -360,10 +470,17 @@ class DrawSpriteTask(IDrawTask):
         glBufferData(GL_ARRAY_BUFFER, self.data.tobytes(), GL_STATIC_DRAW)
 
         glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-        glTexCoordPointer(2, GL_FLOAT, 4 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(0))
+        glTexCoordPointer(
+            2, GL_FLOAT, 4 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(0)
+        )
 
         glEnableClientState(GL_VERTEX_ARRAY)
-        glVertexPointer(2, GL_FLOAT, 4 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
+        glVertexPointer(
+            2,
+            GL_FLOAT,
+            4 * ctypes.sizeof(ctypes.c_float),
+            ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)),
+        )
 
         glDrawArrays(GL_TRIANGLES, 0, int(len(self.data) / 4))
 
@@ -382,7 +499,7 @@ class DrawSpriteTask(IDrawTask):
 
 class DrawColoredVerticesTask(IDrawTask):
     def __init__(self, mode):
-        self.data = array.array('f')
+        self.data = array.array("f")
         self.mode = mode
 
     def append(self, color: Color, vertices: [Vector2], apply_modelview_matrix):
@@ -392,7 +509,9 @@ class DrawColoredVerticesTask(IDrawTask):
             vertex = apply_modelview_matrix(v)
             self.data.extend((vertex.x, vertex.y, r, g, b, a))
 
-    def append_separate(self, colors: [Color], vertices: [Vector2], apply_modelview_matrix):
+    def append_separate(
+        self, colors: [Color], vertices: [Vector2], apply_modelview_matrix
+    ):
         for color, vertex in zip(colors, vertices):
             vertex = apply_modelview_matrix(vertex)
             r, g, b, a = color.normalize()
@@ -405,10 +524,17 @@ class DrawColoredVerticesTask(IDrawTask):
         glBufferData(GL_ARRAY_BUFFER, self.data.tobytes(), GL_STATIC_DRAW)
 
         glEnableClientState(GL_VERTEX_ARRAY)
-        glVertexPointer(2, GL_FLOAT, 6 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(0))
+        glVertexPointer(
+            2, GL_FLOAT, 6 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(0)
+        )
 
         glEnableClientState(GL_COLOR_ARRAY)
-        glColorPointer(4, GL_FLOAT, 6 * ctypes.sizeof(ctypes.c_float), ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)))
+        glColorPointer(
+            4,
+            GL_FLOAT,
+            6 * ctypes.sizeof(ctypes.c_float),
+            ctypes.c_void_p(2 * ctypes.sizeof(ctypes.c_float)),
+        )
 
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
@@ -501,7 +627,7 @@ class RenderContext:
     def __init__(self, width, height, resources: ResourceManager):
         self.width = width
         self.height = height
-        self.font_cache = FontCache(resources.font('RobotoMono-SemiBold.ttf', 16))
+        self.font_cache = FontCache(resources.font("RobotoMono-SemiBold.ttf", 16))
         self.queue = {}
         self.started = time.time()
         self.now = 0
@@ -555,12 +681,16 @@ class RenderContext:
         self.setup_matrices(left, right, bottom, top)
 
         # Adjust minimum zoom factor (used for the minimap display, i.e. fully zoomed out)
-        min_zoom = min(self.width, self.height) / ((planet.radius + planet.atmosphere_height) * 2.5)
+        min_zoom = min(self.width, self.height) / (
+            (planet.radius + planet.atmosphere_height) * 2.5
+        )
 
         factor = min_zoom + (1.0 - min_zoom) * (1 - (1 - zoom))
 
         self.modelview_matrix_stack.translate(-planet.position.x, -planet.position.y)
-        self.modelview_matrix_stack.translate(0, (zoom**.8) * (planet.radius + self.height / 8))
+        self.modelview_matrix_stack.translate(
+            0, (zoom**0.8) * (planet.radius + self.height / 8)
+        )
         self.modelview_matrix_stack.scale(factor, factor)
         self.modelview_matrix_stack.rotate(rotate * 2 * math.pi)
 
@@ -568,41 +698,54 @@ class RenderContext:
         glClearColor(*color.normalize())
         glClear(GL_COLOR_BUFFER_BIT)
 
-    def sprite(self, sprite: ImageSprite, position: Vector2, scale: Vector2 = None, z_layer: int = 0):
+    def sprite(
+        self,
+        sprite: ImageSprite,
+        position: Vector2,
+        scale: Vector2 = None,
+        z_layer: int = 0,
+    ):
         key = (z_layer, sprite)
         if key not in self.queue:
             self.queue[key] = DrawSpriteTask(sprite)
 
-        return self.queue[key].append(position, scale, self.modelview_matrix_stack.apply)
+        return self.queue[key].append(
+            position, scale, self.modelview_matrix_stack.apply
+        )
 
     def text(self, text: str, color: Color, position: Vector2):
         self.sprite(self.font_cache.lookup(text, color), position)
 
     def rect(self, color: Color, rectangle: Rect, *, z_layer: int = 0):
-        self._colored_vertices(GL_TRIANGLES, color, [
-            rectangle.topleft,
-            rectangle.topright,
-            rectangle.bottomright,
-
-            rectangle.topleft,
-            rectangle.bottomright,
-            rectangle.bottomleft,
-        ], z_layer=z_layer)
+        self._colored_vertices(
+            GL_TRIANGLES,
+            color,
+            [
+                rectangle.topleft,
+                rectangle.topright,
+                rectangle.bottomright,
+                rectangle.topleft,
+                rectangle.bottomright,
+                rectangle.bottomleft,
+            ],
+            z_layer=z_layer,
+        )
 
     def aabb(self, color: Color, rectangle: Rect):
-        self._colored_vertices(GL_LINES, color, [
-            rectangle.topleft,
-            rectangle.topright,
-
-            rectangle.topright,
-            rectangle.bottomright,
-
-            rectangle.bottomright,
-            rectangle.bottomleft,
-
-            rectangle.bottomleft,
-            rectangle.topleft,
-        ])
+        self._colored_vertices(
+            GL_LINES,
+            color,
+            [
+                rectangle.topleft,
+                rectangle.topright,
+                rectangle.topright,
+                rectangle.bottomright,
+                rectangle.bottomright,
+                rectangle.bottomleft,
+                rectangle.bottomleft,
+                rectangle.topleft,
+            ],
+        )
 
     def circle(self, color: Color, center: Vector2, radius: float):
         # Small circles can affort 20 steps, for bigger circles,
@@ -620,7 +763,14 @@ class RenderContext:
 
         self._colored_vertices(GL_TRIANGLE_STRIP, color, vertices)
 
-    def donut(self, color_inner: Color, color_outer: Color, center: Vector2, radius_outer: float, radius_inner: float):
+    def donut(
+        self,
+        color_inner: Color,
+        color_outer: Color,
+        center: Vector2,
+        radius_outer: float,
+        radius_inner: float,
+    ):
         # Small circles can affort 20 steps, for bigger circles,
         # add enough steps that the largest line segment is 30 world units
         steps = min(100, max(20, (radius_outer * 2 * math.pi) / 30))
@@ -654,7 +804,7 @@ class RenderContext:
 
         glBegin(GL_TRIANGLE_FAN)
         glColor4f(1, 1, 1, 1)
-        glTexCoord2f(.5, .5)
+        glTexCoord2f(0.5, 0.5)
         glVertex2f(*self.modelview_matrix_stack.apply(center))
 
         # Small circles can affort 20 steps, for bigger circles,
@@ -663,7 +813,9 @@ class RenderContext:
 
         for angle in range(0, 361, int(360 / steps)):
             direction = Vector2(radius, 0).rotate(angle)
-            glTexCoord2f(0.5 + 0.5 * direction.x / radius, 0.5 + 0.5 * direction.y / radius)
+            glTexCoord2f(
+                0.5 + 0.5 * direction.x / radius, 0.5 + 0.5 * direction.y / radius
+            )
             glVertex2f(*self.modelview_matrix_stack.apply(center + direction))
         glEnd()
         glDisable(GL_BLEND)
@@ -671,7 +823,15 @@ class RenderContext:
 
         glBindTexture(GL_TEXTURE_2D, 0)
 
-    def line(self, color: Color, from_point: Vector2, to_point: Vector2, width: float, *, z_layer: int = 0):
+    def line(
+        self,
+        color: Color,
+        from_point: Vector2,
+        to_point: Vector2,
+        width: float,
+        *,
+        z_layer: int = 0,
+    ):
         width = max(1, width)
 
         side = (to_point - from_point).normalize().rotate(90) * (width / 2)
@@ -682,22 +842,30 @@ class RenderContext:
 
         self._colored_vertices(GL_TRIANGLES, color, [a, b, c, b, c, d], z_layer=z_layer)
 
-    def _colored_vertices(self, mode: int, color: Color, vertices: [Vector2], *, z_layer: int = 0):
+    def _colored_vertices(
+        self, mode: int, color: Color, vertices: [Vector2], *, z_layer: int = 0
+    ):
         key = (z_layer, mode)
         if key not in self.queue:
             self.queue[key] = DrawColoredVerticesTask(mode)
 
         self.queue[key].append(color, vertices, self.modelview_matrix_stack.apply)
 
-    def _separately_colored_vertices(self, mode: int, colors: [Color], vertices: [Vector2], *, z_layer: int = 0):
+    def _separately_colored_vertices(
+        self, mode: int, colors: [Color], vertices: [Vector2], *, z_layer: int = 0
+    ):
         key = (z_layer, mode)
         if key not in self.queue:
             self.queue[key] = DrawColoredVerticesTask(mode)
 
-        self.queue[key].append_separate(colors, vertices, self.modelview_matrix_stack.apply)
+        self.queue[key].append_separate(
+            colors, vertices, self.modelview_matrix_stack.apply
+        )
 
     def flush(self):
-        for (z_layer, *key_args), task in sorted(self.queue.items(), key=lambda kv: kv[0][0]):
+        for (z_layer, *key_args), task in sorted(
+            self.queue.items(), key=lambda kv: kv[0][0]
+        ):
             task.draw()
 
         self.queue = {}
@@ -740,11 +908,15 @@ class Branch(IClickReceiver):
         self.plant = plant
         self.phase = phase
         self.depth = depth
-        self.angle = leftright * random.uniform(50, 70) * (0 if (depth == 0) else depth/2.)
+        self.angle = (
+            leftright * random.uniform(50, 70) * (0 if (depth == 0) else depth / 2.0)
+        )
         self.length = length
         if depth == 0:
             self.length += 40
-        self.thickness = max(8, int((self.plant.fertility / 5) / (1 if not depth else depth)))
+        self.thickness = max(
+            8, int((self.plant.fertility / 5) / (1 if not depth else depth))
+        )
         self.children = []
         self.color_mod = random.uniform(0.4, 1.0)
         self.color_mod2 = random.uniform(0.4, 1.0)
@@ -775,8 +947,15 @@ class Branch(IClickReceiver):
         if self.depth == 0:
             phase = max(phase, 1.0 - max(0.4, min(0.6, self.plant.fertility)))
         flength = random.uniform(0.2, 0.3) * 2
-        self.children.append(Branch(phase, self.length * flength, 1-2*(len(self.children)%2), self.depth + 1,
-                                    plant=self.plant))
+        self.children.append(
+            Branch(
+                phase,
+                self.length * flength,
+                1 - 2 * (len(self.children) % 2),
+                self.depth + 1,
+                plant=self.plant,
+            )
+        )
 
     def moregrow(self, recurse=True):
         if not self.children:
@@ -786,14 +965,19 @@ class Branch(IClickReceiver):
 
         candidates = list(self.children) * int(max(1, self.plant.fertility / 20))
 
-        for i in range(int(self.plant.fertility/5)):
+        for i in range(int(self.plant.fertility / 5)):
             if not candidates:
                 break
 
             candidate = random.choice(candidates)
             candidates.remove(candidate)
 
-            if random.choice([True, False] if self.plant.fertility > 30 else [False, False, True]) or not recurse:
+            if (
+                random.choice(
+                    [True, False] if self.plant.fertility > 30 else [False, False, True]
+                )
+                or not recurse
+            ):
                 candidate.grow()
             else:
                 candidate.moregrow(recurse=False)
@@ -810,8 +994,8 @@ class Branch(IClickReceiver):
             return
 
         angle *= factor
-        angle += self.angle * self.plant.growth/100
-        angle *= 1.0 + 0.01 * (100-health)
+        angle += self.angle * self.plant.growth / 100
+        angle *= 1.0 + 0.01 * (100 - health)
 
         # normalize angle to 0..1, store sign
         angle /= 180
@@ -830,33 +1014,52 @@ class Branch(IClickReceiver):
         angle *= 180 * f
 
         # angle added due to wind
-        wind_angle = 10*math.sin(self.plant.wind_phase + self.plant.wind_speed * ctx.now)/max(1, 5-self.depth)
-        wind_angle += (self.plant.wind_amplitude/10)*math.sin(ctx.now*5)
+        wind_angle = (
+            10
+            * math.sin(self.plant.wind_phase + self.plant.wind_speed * ctx.now)
+            / max(1, 5 - self.depth)
+        )
+        wind_angle += (self.plant.wind_amplitude / 10) * math.sin(ctx.now * 5)
 
         direction = Vector2(0, -self.length).rotate(angle + wind_angle)
 
         to_point = pos + direction * factor
-        cm1 = 1.0 - ((1.0 - self.color_mod) * health/100)
-        cm2 = 1.0 - ((1.0 - self.color_mod2) * health/100)
-        color = Color((cm1 * (100-health), cm2 * (244-150+health*1.5), 0))
+        cm1 = 1.0 - ((1.0 - self.color_mod) * health / 100)
+        cm2 = 1.0 - ((1.0 - self.color_mod2) * health / 100)
+        color = Color((cm1 * (100 - health), cm2 * (244 - 150 + health * 1.5), 0))
 
         if self.plant.need_aabb:
-            self.plant.aabb_points.extend((ctx.transform_to_screenspace(pos), ctx.transform_to_screenspace(to_point)))
+            self.plant.aabb_points.extend(
+                (
+                    ctx.transform_to_screenspace(pos),
+                    ctx.transform_to_screenspace(to_point),
+                )
+            )
 
         zoom_adj = self.plant.sector.game.get_zoom_adjustment()
 
-        ctx.line(color, pos, to_point, self.thickness*self.plant.growth/100 + 15 * zoom_adj, z_layer=ctx.LAYER_BRANCHES)
+        ctx.line(
+            color,
+            pos,
+            to_point,
+            self.thickness * self.plant.growth / 100 + 15 * zoom_adj,
+            z_layer=ctx.LAYER_BRANCHES,
+        )
 
         for child in self.children:
             child_factor = max(0, (factor - child.phase) / (1 - child.phase))
-            child.draw(ctx, pos + direction * child.phase * factor, child_factor, angle, health)
+            child.draw(
+                ctx, pos + direction * child.phase * factor, child_factor, angle, health
+            )
 
         if not self.children and self.has_fruit:
             if self.plant.growth > self.random_fruit_appearance_value:
                 ff = factor + zoom_adj
                 tomato = self.plant.artwork.get_tomato_sprite(factor, self.fruit_rotten)
-                topleft = to_point + Vector2(-(tomato.width*ff)/2, 0)
-                ctx.sprite(tomato, topleft, scale=Vector2(ff, ff), z_layer=ctx.LAYER_FRUIT)
+                topleft = to_point + Vector2(-(tomato.width * ff) / 2, 0)
+                ctx.sprite(
+                    tomato, topleft, scale=Vector2(ff, ff), z_layer=ctx.LAYER_FRUIT
+                )
 
                 # You can only click on ripe tomatoes
                 if self.plant.artwork.is_tomato_ripe(tomato):
@@ -864,30 +1067,54 @@ class Branch(IClickReceiver):
                         self.plant.artwork.get_ripe_sound().play()
                         self.was_ripe = True
 
-                    aabb = aabb_from_points([
-                        ctx.transform_to_screenspace(topleft),
-                        ctx.transform_to_screenspace(topleft + Vector2(0, ff * tomato.height)),
-                        ctx.transform_to_screenspace(topleft + Vector2(ff * tomato.width, 0)),
-                        ctx.transform_to_screenspace(topleft + Vector2(ff * tomato.width, ff * tomato.height)),
-                    ])
-
+                    aabb = aabb_from_points(
+                        [
+                            ctx.transform_to_screenspace(topleft),
+                            ctx.transform_to_screenspace(
+                                topleft + Vector2(0, ff * tomato.height)
+                            ),
+                            ctx.transform_to_screenspace(
+                                topleft + Vector2(ff * tomato.width, 0)
+                            ),
+                            ctx.transform_to_screenspace(
+                                topleft + Vector2(ff * tomato.width, ff * tomato.height)
+                            ),
+                        ]
+                    )
 
                     # insert front, so that the layer ordering/event handling works correctly
                     game = self.plant.sector.game
-                    game.debug_aabb.insert(0, (LABEL_FRUIT, Color(255, 255, 255), aabb, self, CLICK_PRIORITY_FRUIT))
-
+                    game.debug_aabb.insert(
+                        0,
+                        (
+                            LABEL_FRUIT,
+                            Color(255, 255, 255),
+                            aabb,
+                            self,
+                            CLICK_PRIORITY_FRUIT,
+                        ),
+                    )
 
                     ctx.modelview_matrix_stack.push()
                     ctx.modelview_matrix_stack.identity()
                     game.planet.apply_planet_surface_transform(self.plant.position)
-                    self.fruit_world_position = ctx.modelview_matrix_stack.apply(topleft + Vector2(tomato.width, tomato.height)/2)
+                    self.fruit_world_position = ctx.modelview_matrix_stack.apply(
+                        topleft + Vector2(tomato.width, tomato.height) / 2
+                    )
                     ctx.modelview_matrix_stack.pop()
 
                     self.plant.sector.ripe_fruits.append(self)
         elif self.has_leaf:
             if self.plant.growth > self.random_leaf_appearance_value:
-                ff = (self.plant.growth - self.random_leaf_appearance_value) / (100 - self.random_leaf_appearance_value)
-                ctx.sprite(self.leaf, to_point + Vector2(-(self.leaf.width*ff)/2, 0), scale=Vector2(ff, ff), z_layer=ctx.LAYER_LEAVES)
+                ff = (self.plant.growth - self.random_leaf_appearance_value) / (
+                    100 - self.random_leaf_appearance_value
+                )
+                ctx.sprite(
+                    self.leaf,
+                    to_point + Vector2(-(self.leaf.width * ff) / 2, 0),
+                    scale=Vector2(ff, ff),
+                    z_layer=ctx.LAYER_LEAVES,
+                )
 
 
 class PlanetSurfaceCoordinates:
@@ -896,8 +1123,10 @@ class PlanetSurfaceCoordinates:
         self.elevation = elevation
 
     def lerp(self, *, target, alpha: float):
-        return PlanetSurfaceCoordinates((1 - alpha) * self.angle_degrees + alpha * target.angle_degrees,
-                                        (1 - alpha) * self.elevation + alpha * target.elevation)
+        return PlanetSurfaceCoordinates(
+            (1 - alpha) * self.angle_degrees + alpha * target.angle_degrees,
+            (1 - alpha) * self.elevation + alpha * target.elevation,
+        )
 
 
 class Planet(IDrawable):
@@ -915,11 +1144,15 @@ class Planet(IDrawable):
         ctx.textured_circle(self.sprite, self.position, self.radius)
 
     def at(self, position: PlanetSurfaceCoordinates):
-        return self.position + Vector2(0, -(self.radius + position.elevation)).rotate(position.angle_degrees)
+        return self.position + Vector2(0, -(self.radius + position.elevation)).rotate(
+            position.angle_degrees
+        )
 
     def apply_planet_surface_transform(self, position: PlanetSurfaceCoordinates):
         self.renderer.modelview_matrix_stack.translate(*self.at(position))
-        self.renderer.modelview_matrix_stack.rotate(position.angle_degrees * math.pi / 180)
+        self.renderer.modelview_matrix_stack.rotate(
+            position.angle_degrees * math.pi / 180
+        )
 
 
 class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
@@ -965,7 +1198,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         # Also, to simplify matters, make fruitfly with tomato invincible ;)
         is_fly_close_enough_to_surface = True
         if is_fly_close_enough_to_surface and self in self.spaceship.flies:
-            print('Brzzzz... you hit a fly')
+            print("Brzzzz... you hit a fly")
             self.artwork.get_random_slap_sound().play()
             self.spaceship.flies.remove(self)
             self.spaceship.dead_flies.append(self)
@@ -978,8 +1211,11 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
 
         if self.returning_to_spaceship:
             self.reparent_to(self.spaceship)
-            new_roaming_offset, did_arrive = self.fly_towards_target(self.FLYING_SPEED_CARRYING
-                    if self.carrying_fruit else self.FLYING_SPEED_NON_CARRYING)
+            new_roaming_offset, did_arrive = self.fly_towards_target(
+                self.FLYING_SPEED_CARRYING
+                if self.carrying_fruit
+                else self.FLYING_SPEED_NON_CARRYING
+            )
             if did_arrive:
                 # ka'ching!
                 self.carrying_fruit = False
@@ -997,16 +1233,22 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
                     self.returning_to_spaceship = True
 
                 self.reparent_to(fruit)
-                new_roaming_offset, did_arrive = self.fly_towards_target(self.FLYING_SPEED_NON_CARRYING)
+                new_roaming_offset, did_arrive = self.fly_towards_target(
+                    self.FLYING_SPEED_NON_CARRYING
+                )
                 if did_arrive:
-                    self.carrying_fruit = fruit.has_fruit and not fruit.plant.was_deleted
+                    self.carrying_fruit = (
+                        fruit.has_fruit and not fruit.plant.was_deleted
+                    )
                     fruit.plant.shake()
                     fruit.has_fruit = False
                     self.returning_to_spaceship = True
             else:
                 self.roaming_target = self.spaceship
-                new_roaming_offset = Vector2(self.spaceship.sprite.width / 2 * math.sin(angle),
-                                             self.spaceship.sprite.height / 2 * math.cos(angle))
+                new_roaming_offset = Vector2(
+                    self.spaceship.sprite.width / 2 * math.sin(angle),
+                    self.spaceship.sprite.height / 2 * math.cos(angle),
+                )
 
         self.x_direction = -1 if new_roaming_offset.x < self.roaming_offset.x else +1
         self.roaming_offset = new_roaming_offset
@@ -1024,33 +1266,55 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
 
         if self.trash_time > 0:
             # Fly escapes into space
-            #approx_height = (self.root.length*self.growth/100)
-            #ctx.modelview_matrix_stack.translate(0, -self.trash_time*10)
-            ctx.modelview_matrix_stack.translate(*(self.get_world_position().normalize() * (10 * self.trash_time)))
+            # approx_height = (self.root.length*self.growth/100)
+            # ctx.modelview_matrix_stack.translate(0, -self.trash_time*10)
+            ctx.modelview_matrix_stack.translate(
+                *(self.get_world_position().normalize() * (10 * self.trash_time))
+            )
             ctx.modelview_matrix_stack.translate(*self.get_world_position())
-            ctx.modelview_matrix_stack.rotate(self.trash_time*0.1*self.trash_rotation_direction)
+            ctx.modelview_matrix_stack.rotate(
+                self.trash_time * 0.1 * self.trash_rotation_direction
+            )
             ctx.modelview_matrix_stack.translate(*-self.get_world_position())
-            #ctx.modelview_matrix_stack.translate(+position.x, +position.y)
+            # ctx.modelview_matrix_stack.translate(+position.x, +position.y)
 
         # FIXME: Rotation is all off, should use the current sector's modelview
-        corners = ctx.sprite(fly_sprite, position, scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FLIES)
+        corners = ctx.sprite(
+            fly_sprite,
+            position,
+            scale=Vector2(direction, 1) * scale_up,
+            z_layer=ctx.LAYER_FLIES,
+        )
 
         if self.carrying_fruit:
-            fly_offset += Vector2(0, fly_sprite.height/2)
-            corners.extend(ctx.sprite(self.artwork.get_ripe_tomato(), position,
-                                      scale=Vector2(direction, 1) * scale_up, z_layer=ctx.LAYER_FRUIT))
+            fly_offset += Vector2(0, fly_sprite.height / 2)
+            corners.extend(
+                ctx.sprite(
+                    self.artwork.get_ripe_tomato(),
+                    position,
+                    scale=Vector2(direction, 1) * scale_up,
+                    z_layer=ctx.LAYER_FRUIT,
+                )
+            )
 
         planet = self.game.planet
 
-        if not self.game.drawing_minimap and self.get_world_position().length() < (planet.radius + planet.atmosphere_height):
-            self.aabb = aabb_from_points([ctx.transform_to_screenspace(p) for p in corners])
-            self.aabb = self.aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
+        if not self.game.drawing_minimap and self.get_world_position().length() < (
+            planet.radius + planet.atmosphere_height
+        ):
+            self.aabb = aabb_from_points(
+                [ctx.transform_to_screenspace(p) for p in corners]
+            )
+            self.aabb = self.aabb.inflate(
+                self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2
+            )
 
         if self.aabb is not None:
-            self.game.debug_aabb.insert(0, (LABEL_FLY, Color(255, 0, 0), self.aabb, self, CLICK_PRIORITY_FLY))
+            self.game.debug_aabb.insert(
+                0, (LABEL_FLY, Color(255, 0, 0), self.aabb, self, CLICK_PRIORITY_FLY)
+            )
 
         ctx.modelview_matrix_stack.pop()
-
 
     def draw(self, ctx):
         scale_up = 1 + self.game.get_zoom_adjustment()
@@ -1060,7 +1324,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
 
 class Spaceship(IUpdateReceiver, IDrawable):
     ELEVATION_BEGIN = 2000
-    #ELEVATION_BEGIN = 600
+    # ELEVATION_BEGIN = 600
     ELEVATION_DOWN = 300
 
     BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500
@@ -1074,8 +1338,12 @@ class Spaceship(IUpdateReceiver, IDrawable):
         self.sprite = artwork.get_spaceship()
         self.target_sector = self.pick_target_sector()
         self.near_target_sector = False
-        self.coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_BEGIN)
-        self.target_coordinates = PlanetSurfaceCoordinates(self.target_sector.get_center_angle(), elevation=self.ELEVATION_DOWN)
+        self.coordinates = PlanetSurfaceCoordinates(
+            self.target_sector.get_center_angle(), elevation=self.ELEVATION_BEGIN
+        )
+        self.target_coordinates = PlanetSurfaceCoordinates(
+            self.target_sector.get_center_angle(), elevation=self.ELEVATION_DOWN
+        )
         self.ticks = 0
         self.flies = []
         self.collected_tomatoes = 0
@@ -1090,11 +1358,13 @@ class Spaceship(IUpdateReceiver, IDrawable):
         self.total_collected += 1
         if self.collected_tomatoes == self.TOMATO_TO_FLY:
             # FIXME??
-            #self.add_fly()
+            # self.add_fly()
             self.collected_tomatoes = 0
 
     def add_fly(self):
-        self.flies.append(FruitFly(self.game, self, self.artwork, random.uniform(0, 2*math.pi)))
+        self.flies.append(
+            FruitFly(self.game, self, self.artwork, random.uniform(0, 2 * math.pi))
+        )
 
     def breed_flies(self):
         min_num_flies = 2
@@ -1110,8 +1380,10 @@ class Spaceship(IUpdateReceiver, IDrawable):
         return None
 
     def current_sector_cleared(self):
-        return self.near_target_sector and all(fly.roaming_target == self and not fly.returning_to_spaceship
-                                               for fly in self.flies)
+        return self.near_target_sector and all(
+            fly.roaming_target == self and not fly.returning_to_spaceship
+            for fly in self.flies
+        )
 
     def pick_target_sector(self):
         if CLIARGS.debug:
@@ -1132,12 +1404,20 @@ class Spaceship(IUpdateReceiver, IDrawable):
             self.target_sector = self.pick_target_sector()
 
         now = self.game.renderer.now
-        self.target_coordinates.angle_degrees = self.target_sector.get_center_angle() + 10 * math.sin(now/10)
+        self.target_coordinates.angle_degrees = (
+            self.target_sector.get_center_angle() + 10 * math.sin(now / 10)
+        )
         self.target_coordinates.elevation = self.ELEVATION_DOWN + 30 * math.cos(now)
-        self.coordinates = self.coordinates.lerp(target=self.target_coordinates, alpha=0.01)
+        self.coordinates = self.coordinates.lerp(
+            target=self.target_coordinates, alpha=0.01
+        )
 
-        self.near_target_sector = ((self.coordinates.elevation < self.ELEVATION_DOWN + 50) and
-                                   (abs(self.coordinates.angle_degrees - self.target_sector.get_center_angle()) < 15))
+        self.near_target_sector = (
+            self.coordinates.elevation < self.ELEVATION_DOWN + 50
+        ) and (
+            abs(self.coordinates.angle_degrees - self.target_sector.get_center_angle())
+            < 15
+        )
 
         for fly in self.flies:
             fly.update()
@@ -1145,7 +1425,9 @@ class Spaceship(IUpdateReceiver, IDrawable):
         for dead_fly in self.dead_flies:
             dead_fly.trash_time += 1
 
-        self.dead_flies = [dead_fly for dead_fly in self.dead_flies if dead_fly.trash_time < 3 * 60]
+        self.dead_flies = [
+            dead_fly for dead_fly in self.dead_flies if dead_fly.trash_time < 3 * 60
+        ]
 
     def is_time_to_breed_flies(self):
         return self.ticks % self.BREEDING_EVERY_N_TICKS == 0
@@ -1158,7 +1440,11 @@ class Spaceship(IUpdateReceiver, IDrawable):
 
         ctx.modelview_matrix_stack.push()
         self.planet.apply_planet_surface_transform(self.coordinates)
-        ctx.sprite(self.sprite, -Vector2(self.sprite.width, self.sprite.height) / 2 * scale_up, Vector2(scale_up, scale_up))
+        ctx.sprite(
+            self.sprite,
+            -Vector2(self.sprite.width, self.sprite.height) / 2 * scale_up,
+            Vector2(scale_up, scale_up),
+        )
 
         ctx.modelview_matrix_stack.pop()
 
@@ -1175,7 +1461,9 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.index = index
         self.base_angle = base_angle
         self.number_of_plants = random.choice([2, 3, 5, 6])
-        self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[self.number_of_plants] * 3
+        self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[
+            self.number_of_plants
+        ] * 3
         self.fertility = int(random.uniform(10, 50))
         growth_speed = 100 if CLIARGS.fast else 3
         self.growth_speed = random.uniform(0.02, 0.06) * growth_speed
@@ -1187,7 +1475,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.plant_trash_heap = []
 
     def get_center_angle(self):
-        return (self.base_angle + self.sector_width_degrees / 2)
+        return self.base_angle + self.sector_width_degrees / 2
 
     def clicked(self):
         print(f"ouch, i'm a sector! {self.index}")
@@ -1200,16 +1488,28 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
 
         self.plants = []
         for j in range(self.number_of_plants):
-            coordinate = PlanetSurfaceCoordinates(self.base_angle +
-                                                  self.sector_width_degrees * (j / (self.number_of_plants-1)))
-            self.plants.append(Plant(self, self.game.planet, coordinate, self.fertility, self.game.artwork))
+            coordinate = PlanetSurfaceCoordinates(
+                self.base_angle
+                + self.sector_width_degrees * (j / (self.number_of_plants - 1))
+            )
+            self.plants.append(
+                Plant(
+                    self,
+                    self.game.planet,
+                    coordinate,
+                    self.fertility,
+                    self.game.artwork,
+                )
+            )
 
     def replant(self, plant):
         plant.was_deleted = True
         plant.artwork.get_random_mowing_sound().play()
         self.plant_trash_heap.append(plant)
         index = self.plants.index(plant)
-        self.plants[index] = Plant(self, self.game.planet, plant.position, self.fertility, self.game.artwork)
+        self.plants[index] = Plant(
+            self, self.game.planet, plant.position, self.fertility, self.game.artwork
+        )
 
     def invalidate_aabb(self):
         self.aabb = None
@@ -1223,7 +1523,9 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         for plant in self.plant_trash_heap:
             plant.trash_time += 1
 
-        self.plant_trash_heap = [plant for plant in self.plant_trash_heap if plant.trash_time < 3 * 60]
+        self.plant_trash_heap = [
+            plant for plant in self.plant_trash_heap if plant.trash_time < 3 * 60
+        ]
 
     def draw(self, ctx):
         self.aabb = None
@@ -1235,21 +1537,44 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         for plant in self.plants:
             plant.draw(ctx)
             if plant.root_aabb is not None:
-                self.game.debug_aabb.append((f"{LABEL_PLANT} ({plant.health:.0f}%)", Color(0, 128, 128), plant.root_aabb, plant, CLICK_PRIORITY_PLANT))
+                self.game.debug_aabb.append(
+                    (
+                        f"{LABEL_PLANT} ({plant.health:.0f}%)",
+                        Color(0, 128, 128),
+                        plant.root_aabb,
+                        plant,
+                        CLICK_PRIORITY_PLANT,
+                    )
+                )
                 if self.aabb is None:
                     self.aabb = Rect(plant.aabb)
                 else:
                     self.aabb = self.aabb.union(plant.aabb)
 
         if self.aabb is not None:
-            self.game.debug_aabb.append((f'{LABEL_SECTOR} {self.index}', Color(128, 255, 128), self.aabb, self, CLICK_PRIORITY_SECTOR))
+            self.game.debug_aabb.append(
+                (
+                    f"{LABEL_SECTOR} {self.index}",
+                    Color(128, 255, 128),
+                    self.aabb,
+                    self,
+                    CLICK_PRIORITY_SECTOR,
+                )
+            )
 
 
 class Plant(IUpdateReceiver, IClickReceiver):
     AABB_PADDING_PX = 40
     CURSOR = "cut"
 
-    def __init__(self, sector: Sector, planet: Planet, position: PlanetSurfaceCoordinates, fertility, artwork: Artwork):
+    def __init__(
+        self,
+        sector: Sector,
+        planet: Planet,
+        position: PlanetSurfaceCoordinates,
+        fertility,
+        artwork: Artwork,
+    ):
         super().__init__()
 
         self.sector = sector
@@ -1266,11 +1591,11 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.health = 100
         self.fertility = fertility
 
-        self.wind_phase = random.uniform(0, 2*math.pi)
+        self.wind_phase = random.uniform(0, 2 * math.pi)
         self.wind_speed = random.uniform(0.9, 1.3)
         self.wind_amplitude = 0
 
-        length = random.uniform(100, 500)*(0.5+0.5*self.fertility/100) / 2
+        length = random.uniform(100, 500) * (0.5 + 0.5 * self.fertility / 100) / 2
 
         self.root = Branch(phase=0, length=length, leftright=+1, depth=0, plant=self)
         self.root.grow()
@@ -1284,7 +1609,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.trash_time = 0
 
     def clicked(self):
-        print('in class Plant.clicked')
+        print("in class Plant.clicked")
         self.sector.replant(self)
         return True
 
@@ -1323,19 +1648,25 @@ class Plant(IUpdateReceiver, IClickReceiver):
 
         if self.trash_time > 0:
             # Plant escapes into space
-            approx_height = (self.root.length*self.growth/100)
-            ctx.modelview_matrix_stack.translate(0, -self.trash_time*10)
-            ctx.modelview_matrix_stack.translate(0, -approx_height/2)
-            ctx.modelview_matrix_stack.rotate(self.trash_time*0.1*self.trash_rotation_direction)
-            ctx.modelview_matrix_stack.translate(0, +approx_height/2)
+            approx_height = self.root.length * self.growth / 100
+            ctx.modelview_matrix_stack.translate(0, -self.trash_time * 10)
+            ctx.modelview_matrix_stack.translate(0, -approx_height / 2)
+            ctx.modelview_matrix_stack.rotate(
+                self.trash_time * 0.1 * self.trash_rotation_direction
+            )
+            ctx.modelview_matrix_stack.translate(0, +approx_height / 2)
 
-        self.root.draw(ctx, Vector2(0, 0), factor, 0., self.health)
+        self.root.draw(ctx, Vector2(0, 0), factor, 0.0, self.health)
 
         if self.need_aabb and self.aabb_points:
             self.aabb = aabb_from_points(self.aabb_points)
-            self.aabb = self.aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
+            self.aabb = self.aabb.inflate(
+                self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2
+            )
             self.root_aabb = aabb_from_points(self.aabb_points[:1])
-            self.root_aabb = self.root_aabb.inflate(self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2)
+            self.root_aabb = self.root_aabb.inflate(
+                self.AABB_PADDING_PX * 2, self.AABB_PADDING_PX * 2
+            )
             self.aabb_points = []
             self.need_aabb = False
 
@@ -1343,7 +1674,9 @@ class Plant(IUpdateReceiver, IClickReceiver):
 
 
 class Rock(IDrawable):
-    def __init__(self, planet: Planet, position: PlanetSurfaceCoordinates, artwork: Artwork):
+    def __init__(
+        self, planet: Planet, position: PlanetSurfaceCoordinates, artwork: Artwork
+    ):
         self.planet = planet
         self.position = position
         self.artwork = artwork
@@ -1355,7 +1688,7 @@ class Rock(IDrawable):
 
         self.planet.apply_planet_surface_transform(self.position)
 
-        ctx.sprite(self.rock, Vector2(-self.rock.width/2, -self.rock.height + 10))
+        ctx.sprite(self.rock, Vector2(-self.rock.width / 2, -self.rock.height + 10))
 
         ctx.modelview_matrix_stack.pop()
 
@@ -1429,7 +1762,6 @@ class VBox(Box):
         self.rect.w = right - self.rect.x + self.border
 
 
-
 class Slider(Widget):
     WIDTH = 200
     HEIGHT = 30
@@ -1450,16 +1782,24 @@ class Slider(Widget):
         super().draw(ctx)
         fraction = (self.value - self.min) / (self.max - self.min)
         radius = self.rect.height / 2
-        center = self.rect.topleft + Vector2(radius + (self.rect.width - 2 * radius) * fraction, self.rect.height / 2)
+        center = self.rect.topleft + Vector2(
+            radius + (self.rect.width - 2 * radius) * fraction, self.rect.height / 2
+        )
         ctx.circle(Color(200, 200, 255), center, radius)
-        ctx.text(f'{self.label}: {self.value:.0f}', Color(255, 255, 255), Vector2(self.rect.topleft))
+        ctx.text(
+            f"{self.label}: {self.value:.0f}",
+            Color(255, 255, 255),
+            Vector2(self.rect.topleft),
+        )
 
     def mousedown(self, pos):
         self._begin_drag = Vector2(pos)
 
     def mousemove(self, pos):
         delta = (Vector2(pos).x - self._begin_drag.x) / self.rect.width
-        self.value = max(self.min, min(self.max, self.value + delta * (self.max - self.min)))
+        self.value = max(
+            self.min, min(self.max, self.value + delta * (self.max - self.min))
+        )
         self._begin_drag = Vector2(pos)
 
     def mouseup(self, pos):
@@ -1498,7 +1838,13 @@ class DebugGUI(Container):
 class Window:
     EVENT_TYPE_UPDATE = pygame.USEREVENT + 42
 
-    def __init__(self, title: str, width: int = 1280, height: int = 720, updates_per_second: int = 60):
+    def __init__(
+        self,
+        title: str,
+        width: int = 1280,
+        height: int = 720,
+        updates_per_second: int = 60,
+    ):
         self.title = title
         self.width = width
         self.height = height
@@ -1508,14 +1854,14 @@ class Window:
         pygame.display.gl_set_attribute(GL_MULTISAMPLEBUFFERS, 1)
         pygame.display.gl_set_attribute(GL_MULTISAMPLESAMPLES, 4)
 
-        self.screen = pygame.display.set_mode((width, height), DOUBLEBUF|OPENGL)
+        self.screen = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
         pygame.display.set_caption(title)
         pygame.font.init()
         pygame.time.set_timer(self.EVENT_TYPE_UPDATE, int(1000 / updates_per_second))
         self.running = True
 
     def set_subtitle(self, subtitle):
-        pygame.display.set_caption(f'{self.title}: {subtitle}')
+        pygame.display.set_caption(f"{self.title}: {subtitle}")
 
     def process_events(self, *, mouse: IMouseReceiver, update: IUpdateReceiver):
         for event in pygame.event.get():
@@ -1541,7 +1887,7 @@ class Minimap(IClickReceiver):
     def __init__(self, game):
         self.game = game
 
-        fraction = 1/8
+        fraction = 1 / 8
         border = 20
 
         size = Vector2(self.game.width, self.game.height) * fraction
@@ -1554,8 +1900,8 @@ class Minimap(IClickReceiver):
 
 
 class Game(Window, IUpdateReceiver, IMouseReceiver):
-    def __init__(self, data_path: str = os.path.join(HERE, 'data')):
-        super().__init__('Red Planted')
+    def __init__(self, data_path: str = os.path.join(HERE, "data")):
+        super().__init__("Red Planted")
         pygame.mixer.init()  # Claus-TBD: here? In tutorials, we often see pygame.init(), which part corresponds to that?
 
         self.resources = ResourceManager(data_path)
@@ -1569,20 +1915,27 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.rotation_angle_degrees = 0
 
-        self.gui = DebugGUI(self, [
-            VBox([
-                # ...
-            ])
-        ])
+        self.gui = DebugGUI(
+            self,
+            [
+                VBox(
+                    [
+                        # ...
+                    ]
+                )
+            ],
+        )
 
         self.minimap = Minimap(self)
 
         self.num_sectors = 5
         for i in range(self.num_sectors):
-            sector = Sector(self, i, i*340/self.num_sectors)
+            sector = Sector(self, i, i * 340 / self.num_sectors)
             self.sectors.append(sector)
 
-            coordinate = PlanetSurfaceCoordinates(sector.get_center_angle() + 0.5 * 360 / self.num_sectors)
+            coordinate = PlanetSurfaceCoordinates(
+                sector.get_center_angle() + 0.5 * 360 / self.num_sectors
+            )
             self.rocks.append(Rock(self.planet, coordinate, self.artwork))
 
         self.spaceship = Spaceship(self, self.planet, self.artwork)
@@ -1596,8 +1949,13 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.tomato_score = 0
 
         stars_range = self.planet.radius * 2
-        self.stars = [Vector2(random.uniform(-stars_range, +stars_range),
-                              random.uniform(-stars_range, +stars_range)) for i in range(100)]
+        self.stars = [
+            Vector2(
+                random.uniform(-stars_range, +stars_range),
+                random.uniform(-stars_range, +stars_range),
+            )
+            for i in range(100)
+        ]
 
     def get_zoom_adjustment(self):
         if self.drawing_minimap:
@@ -1611,25 +1969,29 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         dy = self.gui.wheel_sum.y
         if dy != 0:
             self.invalidate_aabb()
-        self.rotation_angle_degrees += (dy * (30000 / self.planet.get_circumfence()))
+        self.rotation_angle_degrees += dy * (30000 / self.planet.get_circumfence())
         self.rotation_angle_degrees %= 360
         self.gui.wheel_sum.y = 0
 
-        self.set_subtitle(f'{self.renderer.fps:.0f} FPS')
+        self.set_subtitle(f"{self.renderer.fps:.0f} FPS")
 
     def invalidate_aabb(self):
         for sector in self.sectors:
             sector.invalidate_aabb()
 
     def mousedown(self, position: Vector2):
-        for label, color, rect, obj, priority in sorted(self.debug_aabb, key=lambda t: t[-1]):
+        for label, color, rect, obj, priority in sorted(
+            self.debug_aabb, key=lambda t: t[-1]
+        ):
             if rect.collidepoint(position):
-                print('Clicked on:', label)
+                print("Clicked on:", label)
                 if isinstance(obj, IClickReceiver):
                     if obj.clicked():
-                        print('click was handled -> breaking out')
-                        if label == "fruit":  # Claus-TBD: if we process that in Branch, how does game know?
-                            self.tomato_score +=1
+                        print("click was handled -> breaking out")
+                        if (
+                            label == "fruit"
+                        ):  # Claus-TBD: if we process that in Branch, how does game know?
+                            self.tomato_score += 1
                         break
 
     def mousemove(self, position: Vector2):
@@ -1664,13 +2026,22 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         atmosphere_color_sky = Color(atmosphere_color_ground)
         atmosphere_color_sky.a = 0
 
-        ctx.donut(atmosphere_color_ground, atmosphere_color_sky, self.planet.position,
-                  self.planet.radius, self.planet.radius + self.planet.atmosphere_height)
+        ctx.donut(
+            atmosphere_color_ground,
+            atmosphere_color_sky,
+            self.planet.position,
+            self.planet.radius,
+            self.planet.radius + self.planet.atmosphere_height,
+        )
         ctx.flush()
 
         if details:
             for sector in self.sectors:
-                if not self.cull_via_aabb or not sector.aabb or visible_rect.colliderect(sector.aabb):
+                if (
+                    not self.cull_via_aabb
+                    or not sector.aabb
+                    or visible_rect.colliderect(sector.aabb)
+                ):
                     sector.draw(ctx)
 
         for rock in self.rocks:
@@ -1689,26 +2060,47 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             self.debug_aabb = []
 
             # Draw screen content
-            ctx.camera_mode_world(self.planet, zoom=1.0, rotate=self.rotation_angle_degrees / 360)
-            self.draw_scene(ctx, bg_color=Color(10, 10, 20), details=True, visible_rect=visible_rect)
+            ctx.camera_mode_world(
+                self.planet, zoom=1.0, rotate=self.rotation_angle_degrees / 360
+            )
+            self.draw_scene(
+                ctx, bg_color=Color(10, 10, 20), details=True, visible_rect=visible_rect
+            )
 
             # GL coordinate system origin = bottom left
-            minimap_gl_rect = (int(self.minimap.rect.x),
-                       int(self.height - self.minimap.rect.height - self.minimap.rect.y),
-                       int(self.minimap.rect.width),
-                       int(self.minimap.rect.height))
+            minimap_gl_rect = (
+                int(self.minimap.rect.x),
+                int(self.height - self.minimap.rect.height - self.minimap.rect.y),
+                int(self.minimap.rect.width),
+                int(self.minimap.rect.height),
+            )
 
             glViewport(*minimap_gl_rect)
             glScissor(*minimap_gl_rect)
             glEnable(GL_SCISSOR_TEST)
 
-            self.debug_aabb.append((LABEL_MINIMAP, Color(0, 255, 255), self.minimap.rect, self.minimap, CLICK_PRIORITY_OTHER))
+            self.debug_aabb.append(
+                (
+                    LABEL_MINIMAP,
+                    Color(0, 255, 255),
+                    self.minimap.rect,
+                    self.minimap,
+                    CLICK_PRIORITY_OTHER,
+                )
+            )
 
             self.drawing_minimap = True
 
             # TODO: Draw stylized scene
-            ctx.camera_mode_world(self.planet, zoom=0, rotate=self.rotation_angle_degrees / 360)
-            self.draw_scene(ctx, bg_color=Color(10, 10, 10), details=False, visible_rect=visible_rect)
+            ctx.camera_mode_world(
+                self.planet, zoom=0, rotate=self.rotation_angle_degrees / 360
+            )
+            self.draw_scene(
+                ctx,
+                bg_color=Color(10, 10, 10),
+                details=False,
+                visible_rect=visible_rect,
+            )
             self.drawing_minimap = False
 
             glDisable(GL_SCISSOR_TEST)
@@ -1732,26 +2124,39 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             # Update the cursor dependent on what is below
             mouse_pos = pygame.mouse.get_pos()
             cursor_mode = None
-            for label, color, rect, obj, priority in sorted(self.debug_aabb, key=lambda t: t[-1]):
+            for label, color, rect, obj, priority in sorted(
+                self.debug_aabb, key=lambda t: t[-1]
+            ):
                 if rect.collidepoint(mouse_pos):
                     cursor_mode = getattr(obj, "CURSOR", None)
                     break
             sprite = self.artwork.get_cursor(cursor_mode)
             pygame.mouse.set_visible(not bool(sprite))
             if sprite:
-                ctx.sprite(sprite, Vector2(mouse_pos) - Vector2(sprite.img.get_size()) / 2)
+                ctx.sprite(
+                    sprite, Vector2(mouse_pos) - Vector2(sprite.img.get_size()) / 2
+                )
             ctx.flush()
 
             # Claus-NEXT
-            text = f'Tomatoes: {self.tomato_score}'
-            ctx.text(text, Color(0, 255, 255), Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 10))
+            text = f"Tomatoes: {self.tomato_score}"
+            ctx.text(
+                text,
+                Color(0, 255, 255),
+                Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 10),
+            )
 
-            text = f'Stolen: {self.spaceship.total_collected}'
-            ctx.text(text, Color(0, 255, 255), Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 30))
+            text = f"Stolen: {self.spaceship.total_collected}"
+            ctx.text(
+                text,
+                Color(0, 255, 255),
+                Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 30),
+            )
             ctx.flush()
 
+
 def main():
-    #test_matrix3x3()
+    # test_matrix3x3()
 
     game = Game()
 
