@@ -2149,6 +2149,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
     def _draw_lines(self, lines):
         with self.renderer as ctx:
+            ctx.clear(Color(0, 0, 0))
             initial_position = 300
             offset = 25
             for i, line in enumerate(lines):
