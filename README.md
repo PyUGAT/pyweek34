@@ -42,6 +42,16 @@ find . -name '*.py' | entr sh -c "black . && isort . && pytest -vv"  # but only 
 
 See also the [entr man page](https://www.systutorials.com/docs/linux/man/1-entr/).
 
+
+## Packaging for PyWeek
+
+Run below command to create a ZIP file containing all necessary resources.
+
+```console
+python package_for_pyweek.py
+```
+
+
 ## Daily
 
 We meet every day at 20:00 in [Gather](https://app.gather.town/invite?token=9sXyCr7GdMGEpeNHcGCinsalCna3_b2w).
