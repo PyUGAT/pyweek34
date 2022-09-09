@@ -227,7 +227,7 @@ class ImageSprite:
 
 
 class AnimatedImageSprite:
-    def __init__(self, frames: list[ImageSprite], *, delay_ms: int):
+    def __init__(self, frames, *, delay_ms: int):
         self.frames = frames
         self.delay_ms = delay_ms
 
@@ -380,7 +380,7 @@ class Artwork:
     def get_fly(self):
         return self.fly_animation
 
-    def get_cursor(self, mode: str | None):
+    def get_cursor(self, mode):
         return self.cursors.get(mode, None)
 
     def get_random_pick_sound(self):
