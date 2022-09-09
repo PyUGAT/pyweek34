@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 import subprocess
 
-githash = subprocess.check_output(['git', 'describe', '--always'], encoding='utf-8').strip()
+githash = subprocess.check_output(['git', 'describe', '--always', '--tags', '--long'], encoding='utf-8').strip()
 
 # Configuration
 PACKAGE_NAME = f'RedPlanted-{githash}'
