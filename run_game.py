@@ -53,6 +53,7 @@ class ImportantParameterAffectingGameplay:
     MIN_NUM_FLIES = 2
     MAX_NUM_FLIES = 4
     GROWTH_SPEED = 100 if CLIARGS.fast else 3
+    FERTILITY = (10, 50)
 
 
 def multiply_3x3(a, b):
@@ -1484,9 +1485,8 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[
             self.number_of_plants
         ] * 3
-        self.fertility = int(random.uniform(10, 50))
-        growth_speed = ImportantParameterAffectingGameplay.GROWTH_SPEED
-        self.growth_speed = random.uniform(0.02, 0.06) * growth_speed
+        self.fertility = int(random.uniform(*ImportantParameterAffectingGameplay.FERTILITY))
+        self.growth_speed = random.uniform(0.02, 0.06) * ImportantParameterAffectingGameplay.GROWTH_SPEED
         self.rotting_speed = random.uniform(0.01, 0.02)
         self.plants = []
         self.make_new_plants()
