@@ -49,7 +49,7 @@ CLIARGS = parser.parse_args()
 
 class ImportantParameterAffectingGameplay:
     GAMEOVER_THRESHOLD_FLIES_WIN = 10 if CLIARGS.fast else 20  # Flies win when they steal N tomatoes
-    GAMEOVER_THRESHOLD_PLAYER_WINS = 2 if CLIARGS.fast else 20  # Player wins when harvested N tomatoes
+    GAMEOVER_THRESHOLD_PLAYER_WINS = 2 if CLIARGS.fast else 50  # Player wins when harvested N tomatoes
     BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500  # Reproduction interval to maintain MIN_NUM_FLIES, increase/decrease value to slow down/seep up reproduction
     MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = 100 if CLIARGS.fast else 1000  # How often the spaceship changes location, increase/decrease value to decrease/increase changes
     TOMATO_TO_FLY = 1  # N collected tomatoes result in 1 fly; min value 1, increase to slow down reproduction
@@ -645,6 +645,7 @@ class RenderContext:
         self.font_cache = FontCache(resources.font("RobotoMono-SemiBold.ttf", 16))
         self.queue = {}
         self.started = time.time()
+        self.paused_started = None
         self.now = 0
         self.clock = pygame.time.Clock()
         self.fps = 0
@@ -653,6 +654,8 @@ class RenderContext:
 
     def __enter__(self):
         self.now = time.time() - self.started
+        if self.paused_started:
+            self.now -= time.time() - self.paused_started
         self.camera_mode_overlay()
         return self
 
@@ -731,6 +734,11 @@ class RenderContext:
     def text(self, text: str, color: Color, position: Vector2):
         if text:
             self.sprite(self.font_cache.lookup(text, color), position)
+
+    def text_centered(self, text: str, color: Color):
+        if text:
+            sprite = self.font_cache.lookup(text, color)
+            self.sprite(sprite, (Vector2(self.width, self.height) - Vector2(sprite.width, sprite.height)) / 2)
 
     def rect(self, color: Color, rectangle: Rect, *, z_layer: int = 0):
         self._colored_vertices(
@@ -1892,10 +1900,16 @@ class Window:
         for event in pygame.event.get():
             if event.type == QUIT:
                 self.quit()
-            if gamestate.is_startup and self._is_spacebar_down(event):
+
+            if self._is_spacebar_down(event):
                 gamestate.is_running = not gamestate.is_running
-            elif self._is_spacebar_down(event):
-                gamestate.is_running = not gamestate.is_running
+                if gamestate.is_running:
+                    if self.renderer.paused_started is not None:
+                        self.renderer.started += (time.time() - self.renderer.paused_started)
+                    self.renderer.paused_started = None
+                else:
+                    self.renderer.paused_started = time.time()
+
             if gamestate.is_running:
                 if event.type == MOUSEBUTTONDOWN and event.button == LEFT_MOUSE_BUTTON:
                     mouse.mousedown(event.pos)
@@ -2033,9 +2047,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             self.gui.wheel_sum.y = 0
 
             self.set_subtitle(f"{self.renderer.fps:.0f} FPS")
-            self.render_scene()
+            self.render_scene(paused=False)
         else:
-            pygame.time.wait(1000 // 120)
+            self.render_scene(paused=True)
 
     def invalidate_aabb(self):
         for sector in self.sectors:
@@ -2121,11 +2135,19 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         Our sensors detected an incoming flyship.
         Fend them off and bring in our harvest before it is too late!
 
-        Our spies tell us the only need to steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} !#@&/ before are all doomed...
+        If the flies steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} space tomatoes, we are doomed...
 
-        Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} !#@&/ and we will ketchdown the flies in this quadrant!
+        Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} space tomatoes and we will ketchdown the flies in this quadrant!
 
-        Hit space to start.
+            How to play:
+
+            Use the scroll wheel (or touchpad scroll) to move around the planet.
+            Click on a tomato fruit to harvest it.
+            Click on a fly (within the atmosphere) to kick it out of orbit.
+            Click on the roots of plants to cut them off and let a new one sprout.
+            A plant will only grow tomatoes once! Cut it off to grow a new one.
+
+        Press SPACEBAR to start.
         """).splitlines())
 
     def render_gameover_flies_win(self):
@@ -2150,12 +2172,12 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             for i, line in enumerate(lines):
                 ctx.text(
                     line,
-                    Color(0, 255, 255),
+                    Color(255, 80, 30) if line.startswith('    ') else Color(30, 255, 180),
                     Vector2(100, initial_position + i * offset),
                 )
             ctx.flush()
 
-    def render_scene(self):
+    def render_scene(self, *, paused=False):
         with self.renderer as ctx:
             visible_rect = Rect(0, 0, self.width, self.height)
 
@@ -2255,6 +2277,12 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 Vector2(self.minimap.rect.left, self.minimap.rect.bottom + 30),
             )
             ctx.flush()
+
+            if paused:
+                ctx.rect(Color(0, 0, 0, 200), Rect(0, 0, self.width, self.height))
+                ctx.flush()
+                ctx.text_centered("Game Paused - Press SPACEBAR to continue", Color(255, 255, 255))
+                ctx.flush()
 
 
 def main():
