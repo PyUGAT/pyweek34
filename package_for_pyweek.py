@@ -48,4 +48,4 @@ completed_process = subprocess.run(['python', 'run_game.py',], check=False, cwd=
 if completed_process.returncode == 0:
     print('Creating ZIP...')
     shutil.make_archive(target_folder, 'zip', target_folder)
-    print('Created ZIP archive! \o/')
+    print(r'Created ZIP archive! \o/')
