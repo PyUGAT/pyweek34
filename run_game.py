@@ -728,7 +728,8 @@ class RenderContext:
         )
 
     def text(self, text: str, color: Color, position: Vector2):
-        self.sprite(self.font_cache.lookup(text, color), position)
+        if text:
+            self.sprite(self.font_cache.lookup(text, color), position)
 
     def rect(self, color: Color, rectangle: Rect, *, z_layer: int = 0):
         self._colored_vertices(
