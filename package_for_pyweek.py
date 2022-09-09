@@ -9,9 +9,10 @@ import shutil
 from pathlib import Path
 import subprocess
 
+githash = subprocess.check_output(['git', 'describe', '--always'], encoding='utf-8').strip()
 
 # Configuration
-PACKAGE_NAME = 'RedPlanted'
+PACKAGE_NAME = f'RedPlanted-{githash}'
 RESOURCES = [
     'data',
     'run_game.py',
