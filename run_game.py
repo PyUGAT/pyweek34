@@ -1995,7 +1995,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                     if obj.clicked():
                         print("click was handled -> breaking out")
                         if (
-                            label == "fruit"
+                            label == LABEL_FRUIT
                         ):  # Claus-TBD: if we process that in Branch, how does game know?
                             self.tomato_score += 1
                         break
