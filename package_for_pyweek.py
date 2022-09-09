@@ -16,6 +16,7 @@ RESOURCES = [
     'data',
     'run_game.py',
     'requirements.txt',
+    'ARTWORK.md',
 ]
 HERE = os.path.dirname(__file__)
 DST = 'sdist'
@@ -65,7 +66,7 @@ readme.write_text(README)
 
 # run game
 print('Will try to run the game now. Check if everything works and then close the window.')
-completed_process = subprocess.run(['python', 'run_game.py',], check=False, cwd=target_folder)
+completed_process = subprocess.run(['python3', 'run_game.py',], check=False, cwd=target_folder)
 
 # if okay, create archive
 if completed_process.returncode == 0:
