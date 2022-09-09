@@ -1773,81 +1773,6 @@ class Container(Widget):
             child.draw(ctx)
 
 
-class Box(Container):
-    def __init__(self, border=24, spacing=12):
-        super().__init__()
-        self.border = border
-        self.spacing = spacing
-
-
-class VBox(Box):
-    def __init__(self, children=None):
-        super().__init__()
-        if children is not None:
-            for child in children:
-                self.add(child)
-
-    def layout(self):
-        pos = Vector2(self.rect.topleft) + Vector2(self.border, self.border)
-        right = self.rect.left + self.border
-        for child in self.children:
-            child.layout()
-            child.rect.topleft = pos
-            right = max(right, child.rect.right)
-            pos.y = child.rect.bottom + self.spacing
-
-        if self.children:
-            pos.y -= self.spacing
-
-        self.rect.h = pos.y - self.rect.y
-        self.rect.w = right - self.rect.x + self.border
-
-
-class Slider(Widget):
-    WIDTH = 200
-    HEIGHT = 30
-
-    def __init__(self, label, minimum, maximum, value, on_value_changed=None):
-        super().__init__(self.WIDTH, self.HEIGHT)
-        self.label = label
-        self.min = minimum
-        self.max = maximum
-        self.value = value
-        self._begin_drag = None
-        self.on_value_changed = on_value_changed
-
-    def layout(self):
-        self.rect.size = (self.WIDTH, self.HEIGHT)
-
-    def draw(self, ctx):
-        super().draw(ctx)
-        fraction = (self.value - self.min) / (self.max - self.min)
-        radius = self.rect.height / 2
-        center = self.rect.topleft + Vector2(
-            radius + (self.rect.width - 2 * radius) * fraction, self.rect.height / 2
-        )
-        ctx.circle(Color(200, 200, 255), center, radius)
-        ctx.text(
-            f"{self.label}: {self.value:.0f}",
-            Color(255, 255, 255),
-            Vector2(self.rect.topleft),
-        )
-
-    def mousedown(self, pos):
-        self._begin_drag = Vector2(pos)
-
-    def mousemove(self, pos):
-        delta = (Vector2(pos).x - self._begin_drag.x) / self.rect.width
-        self.value = max(
-            self.min, min(self.max, self.value + delta * (self.max - self.min))
-        )
-        self._begin_drag = Vector2(pos)
-
-    def mouseup(self, pos):
-        if self.on_value_changed is not None:
-            self.on_value_changed()
-
-
 class DebugGUI(Container):
     def __init__(self, default_handler: IMouseReceiver, widgets=None):
         super().__init__()
@@ -1971,16 +1896,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.rotation_angle_degrees = 0
 
-        self.gui = DebugGUI(
-            self,
-            [
-                VBox(
-                    [
-                        # ...
-                    ]
-                )
-            ],
-        )
+        self.gui = DebugGUI(self)
 
         self.minimap = Minimap(self)
 
