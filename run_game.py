@@ -50,6 +50,9 @@ parser.add_argument(
 parser.add_argument(
     "--fast", action="store_true", help="Fast growth to accelerate startup"
 )
+parser.add_argument(
+    "--no-multisample", action="store_true", help="Disable OpenGL multi-sampling (for old GPUs)"
+)
 CLIARGS = parser.parse_args()
 
 
@@ -1888,9 +1891,9 @@ class Window:
         self.height = height
         pygame.display.init()
 
-        # If your GPU doesn't support this, uncomment the next two lines (TODO: Auto-detect / command-line args?)
-        pygame.display.gl_set_attribute(GL_MULTISAMPLEBUFFERS, 1)
-        pygame.display.gl_set_attribute(GL_MULTISAMPLESAMPLES, 4)
+        if not CLIARGS.no_multisample:
+            pygame.display.gl_set_attribute(GL_MULTISAMPLEBUFFERS, 1)
+            pygame.display.gl_set_attribute(GL_MULTISAMPLESAMPLES, 4)
 
         self.screen = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
         pygame.display.set_caption(title)

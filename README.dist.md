@@ -37,7 +37,13 @@ you can solve it within your environment by `conda install -c conda-forge libstd
 ## Play
 
 ```console
-python run_game.py
+python3 run_game.py
+```
+
+If your GPU doesn't support multi-sampling, you can disable it:
+
+```console
+python3 run_game.py --no-multisample
 ```
 
 ## Credits
