@@ -10,6 +10,7 @@ Please add to this list if you're importing artwork (images/sounds/...):
 * https://www.rawpixel.com/image/6870635/png-sticker-public-domain
 * https://opengameart.org/node/50434
 * https://openclipart.org/detail/2469/fly-swatter
+* https://openclipart.org/detail/211412/splat
 
 
 Sounds:

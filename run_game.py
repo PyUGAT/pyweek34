@@ -372,7 +372,10 @@ class Artwork:
                 True: resources.sprite("cursor_cut_closed_px.png"),
             },
             "harvest": resources.sprite("cursor_harvest_px.png"),
-            "hunt": resources.sprite("cursor_swatter_px.png"),
+            "hunt": {
+                False: resources.sprite("cursor_swatter_px.png"),
+                True: resources.sprite("cursor_swatter_hit_px.png"),
+            },
         }
 
         # animations (images)
