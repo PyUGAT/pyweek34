@@ -1922,6 +1922,28 @@ class Minimap(IClickReceiver):
         # TODO: Could do something with the minimap
         return False
 
+class HarvestedTomato(IUpdateReceiver, IDrawable):
+    def __init__(self, game, screenspace_position, target_position, duration):
+        self.game = game
+        self.sprite = game.artwork.get_ripe_tomato()
+        self.position = screenspace_position
+        self.start_position = Vector2(screenspace_position)
+        self.target_position = Vector2(target_position)
+        self.duration = duration
+        self.started = game.renderer.now
+        self.done = False
+
+    def update(self):
+        alpha = max(0, min(1, (self.game.renderer.now - self.started) / self.duration))
+        if alpha == 1 and not self.done:
+            self.done = True
+            self.game.tomato_score += 1
+        alpha = 1 - (1 - alpha) ** 2
+        self.position = (1 - alpha) * self.start_position + alpha * self.target_position
+
+    def draw(self, ctx):
+        ctx.sprite(self.sprite, self.position - Vector2(self.sprite.width, self.sprite.height) / 2)
+
 
 class Game(Window, IUpdateReceiver, IMouseReceiver):
     def __init__(self, data_path: str = os.path.join(HERE, "data")):
@@ -1975,6 +1997,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.is_running = False
         self.cursor_mode = None
         self.cursor_planet_coordinate = None
+
+        self.harvest_on_mouseup = False
+        self.harvested_tomatoes = []
 
     @property
     def is_startup(self):
@@ -2037,14 +2062,21 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                         if (
                             label == LABEL_FRUIT
                         ):  # Claus-TBD: if we process that in Branch, how does game know?
-                            self.tomato_score += 1
+                            self.harvest_on_mouseup = True
                         break
 
     def mousemove(self, position: Vector2):
         ...
 
     def mouseup(self, position: Vector2):
-        ...
+        if self.harvest_on_mouseup:
+            self.harvest_on_mouseup = False
+            target_pos = Vector2(self.minimap.rect.right - 55, self.minimap.rect.bottom + 23)
+            duration = .6
+            self.harvested_tomatoes.append(HarvestedTomato(self,
+                                                           pygame.mouse.get_pos(),
+                                                           target_pos,
+                                                           duration))
 
     def mousewheel(self, x: float, y: float, flipped: bool):
         ...
@@ -2056,6 +2088,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
     def update(self):
         for sector in self.sectors:
             sector.update()
+
+        for harvested in self.harvested_tomatoes:
+            harvested.update()
+        self.harvested_tomatoes = [harvested for harvested in self.harvested_tomatoes if not harvested.done]
 
         self.spaceship.update()
 
@@ -2239,6 +2275,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             # Draw GUI overlay
             ctx.camera_mode_overlay()
             self.gui.draw(ctx)
+            for harvested in self.harvested_tomatoes:
+                harvested.draw(ctx)
             ctx.flush()
 
             if self.draw_debug_aabb:
