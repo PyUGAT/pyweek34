@@ -1879,6 +1879,7 @@ class Window:
         pygame.display.set_caption(f"{self.title}: {subtitle}")
 
     def start_game_or_toggle_pause(self):
+        self.game_has_started = True
         self.is_running = not self.is_running
         if self.is_running:
             if self.renderer.paused_started is not None:
@@ -1900,6 +1901,11 @@ class Window:
 
             if self._is_spacebar_down(event):
                 gamestate.start_game_or_toggle_pause()
+
+            if event.type == pygame.KEYDOWN and self.want_tutorial and event.key == K_s:
+                self.tutorial_pos = len(self.tutorial)
+                self.want_tutorial = False
+                self.start_game_or_toggle_pause()
 
             if not gamestate.is_running:
                 # main menu
@@ -2025,6 +2031,30 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.harvest_on_mouseup = False
         self.harvested_tomatoes = []
 
+        self.tutorial = [
+                (self.resources.sprite('tutorial-incoming.png'), textwrap.dedent("""
+                Commander, our sensors detected
+                a hostile flyship incoming.
+                """).splitlines()),
+                (self.resources.sprite('tutorial-squash.png'), textwrap.dedent(f"""
+                Fend them off and bring in our
+                harvest before it is too late!
+                """).splitlines()),
+                (self.resources.sprite('tutorial-steal.png'), textwrap.dedent(f"""
+                If the flies steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} space
+                tomatoes, we are doomed...
+                """).splitlines()),
+                (self.resources.sprite('tutorial-harvest.png'), textwrap.dedent(f"""
+                Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} space tomatoes and we will
+                ketchdown the flies in this quadrant!
+                """).splitlines()),
+                (self.resources.sprite('tutorial-cut.png'), textwrap.dedent("""
+                Plants grow tomatoes only once.
+                Cut them off to let another plant grow.
+                """).splitlines()),
+        ]
+        self.tutorial_pos = 0
+
         self.buttons = [
                 ('Play Game', 'play'),
                 ('Instructions', 'help'),
@@ -2034,10 +2064,12 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.active_button = None
         self.want_instructions = False
         self.want_credits = False
+        self.want_tutorial = False
+        self.game_has_started = False
 
     @property
     def is_startup(self):
-        return self.spaceship.ticks == 0
+        return not self.game_has_started
 
     @property
     def is_gameover_flies_win(self):
@@ -2092,10 +2124,19 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         if self.want_credits:
             self.want_credits = False
 
+        if self.want_tutorial:
+            self.tutorial_pos += 1
+            if self.tutorial_pos == len(self.tutorial):
+                self.start_game_or_toggle_pause()
+                self.want_tutorial = False
+
         if (self.is_startup or not self.is_running) and self.active_button is not None:
             label, action = self.active_button
             if action == 'play':
-                self.start_game_or_toggle_pause()
+                if self.tutorial_pos == len(self.tutorial):
+                    self.start_game_or_toggle_pause()
+                else:
+                    self.want_tutorial = True
             elif action == 'help':
                 self.want_instructions = True
             elif action == 'credits':
@@ -2204,16 +2245,37 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         sound and graphic artwork used in this game.
         """).splitlines(), big=True)
 
+    def render_tutorial(self, ctx):
+        sprite, lines = self.tutorial[self.tutorial_pos]
+        xpos = (self.width - sprite.width) / 2
+        ypos = (self.height - sprite.height) / 3
+        ctx.sprite(sprite, Vector2(xpos, ypos))
+
+        margin = 10 + sprite.height
+
+        offset = 30
+        initial_position = ypos + sprite.height + offset / 2
+
+        font_lines = [ctx.font_cache_big.lookup(line or ' ', Color(255, 255, 255)) for line in lines]
+
+        max_line_width = max(line.width for line in font_lines)
+        xpos = (self.width - max_line_width) / 2
+        ypos = initial_position
+
+        for line in font_lines:
+            ctx.sprite(line, Vector2(xpos, ypos))
+            ypos += offset
+
+        tutline = ctx.font_cache.lookup('(click to continue, "s" to skip tutorial)', Color(128, 128, 128))
+
+        ctx.sprite(tutline, Vector2(max(xpos, xpos + max_line_width - tutline.width), ypos + 20))
+        ctx.flush()
+
     def render_instructions(self, ctx):
         self._draw_lines_over(
             ctx,
             textwrap.dedent(
                 f"""
-        Commander, our sensors detected an incoming flyship.
-        Fend them off and bring in our harvest before it is too late!
-        If the flies steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} space tomatoes, we are doomed...
-        Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} space tomatoes and we will ketchdown the flies in this quadrant!
-
             How to play:
             Use the scroll wheel (or touchpad scroll) to move around the planet.
             Click on a tomato fruit to harvest it.
@@ -2256,7 +2318,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         for i, line in enumerate(lines):
             ctx.text(
                 line,
-                Color(255, 255, 255) if line.startswith("    ") else Color(30, 255, 230),
+                Color(255, 255, 255) if line.startswith("    ") else Color(200, 200, 200),
                 Vector2(330 if big else 220, initial_position + i * offset),
                 big=big
             )
@@ -2448,7 +2510,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 self.active_button = None
                 for label, key in self.buttons:
                     rr = Rect(x, y, btn_width, btn_height)
-                    if rr.collidepoint(pygame.mouse.get_pos()) and not self.want_instructions and not self.want_credits:
+                    if rr.collidepoint(pygame.mouse.get_pos()) and (not self.want_instructions and
+                                                                    not self.want_credits and
+                                                                    not self.want_tutorial):
                         color = Color(90, 90, 90)
                         self.active_button = (label, key)
                     else:
@@ -2471,6 +2535,13 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                     ctx.rect(Color(0, 0, 0, 230), Rect(0, 0, self.width, self.height))
                     ctx.flush()
                     self.render_credits(ctx)
+                    ctx.flush()
+
+                if self.want_tutorial:
+                    self.active_button = None
+                    ctx.rect(Color(10, 10, 20), Rect(0, 0, self.width, self.height))
+                    ctx.flush()
+                    self.render_tutorial(ctx)
                     ctx.flush()
 
 
