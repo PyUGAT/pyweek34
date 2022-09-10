@@ -2362,7 +2362,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 ctx.rect(Color(0, 0, 0, 200), Rect(0, 0, self.width, self.height))
                 ctx.flush()
 
-                ctx.sprite(self.artwork.logo, Vector2(220, 20))
+                ctx.sprite(self.artwork.logo, Vector2(220, 50))
                 self.render_instructions(ctx)
                 ctx.flush()
 

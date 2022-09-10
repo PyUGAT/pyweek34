@@ -1,6 +1,6 @@
 # Sources for our artwork
 
-Please add to this list if you're importing artwork (images/sounds/...):
+Images / fonts:
 
 * https://opengameart.org/content/good-fruits-m484-games
 * https://opengameart.org/content/stylized-branches-texture
@@ -11,7 +11,8 @@ Please add to this list if you're importing artwork (images/sounds/...):
 * https://opengameart.org/node/50434
 * https://openclipart.org/detail/2469/fly-swatter
 * https://openclipart.org/detail/211412/splat
-
+* https://www.1001fonts.com/zenith-brk-font.html
+* https://fonts.google.com/specimen/Roboto
 
 Sounds:
 
