@@ -2,8 +2,9 @@
 
 PyUGAT's project repository for PyWeek 34.
 
-- PyWeek Entry: https://pyweek.org/e/RedPlanted/
-- PyUGAT PyWeek: https://pyug.at/PyWeek
+- [PyWeek entry](https://pyweek.org/e/RedPlanted/)
+- [PyUGAT PyWeek](https://pyug.at/PyWeek)
+- [PyConSK lightning talk by thp](https://youtu.be/yvEUoTkUoiA?t=34035)
 
 ## Play
 
