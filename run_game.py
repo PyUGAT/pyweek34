@@ -16,12 +16,6 @@ from pygame.locals import *
 from pygame.math import Vector2
 from pygame.mixer import Sound
 
-CREDITS = """
-        A PyWeek#34 entry by the Python User Group in Vienna, Austria (https://pyug.at/).
-        Authors: Christian Knittl-Frank, Paul Reiter, Claus Aichinger and Thomas Perl.
-        See ARTWORK.md for a list of third party sound and graphic artwork used in this game.
-"""
-
 HERE = os.path.dirname(__file__) or "."
 
 LEFT_MOUSE_BUTTON = 1
@@ -253,6 +247,10 @@ class ImageSprite:
     def load(cls, filename: str):
         return cls(pygame.image.load(filename).convert_alpha(), want_mipmap=True)
 
+    @property
+    def size(self):
+        return Vector2(self.width, self.height)
+
     def _get_texture(self):
         if self._texture is None:
             self._texture = Texture(self, generate_mipmaps=self.want_mipmap)
@@ -363,7 +361,8 @@ class Artwork:
         self.rocks = [resources.sprite(f"rockpx{num}.png") for num in (1, 2, 3, 4)]
         self.planet = resources.sprite("mars.png")
         self.spaceship = resources.sprite("spaceship.png")
-        self.logo = resources.sprite("logo.png")
+        self.logo_text = resources.sprite("logo-text.png")
+        self.logo_bg = resources.sprite("logo-bg.png")
 
         # TODO: Use animated cursors
         self.cursors = {
@@ -680,10 +679,14 @@ class RenderContext:
     LAYER_FRUIT = 80
     LAYER_FLIES = 90
 
+    LAYER_BTN_BG = 100
+    LAYER_BTN_TEXT = 110
+
     def __init__(self, width, height, resources: ResourceManager):
         self.width = width
         self.height = height
         self.font_cache = FontCache(resources.font("RobotoMono-SemiBold.ttf", 16))
+        self.font_cache_big = FontCache(resources.font("RobotoMono-SemiBold.ttf", 24))
         self.queue = {}
         self.started = time.time()
         self.paused_started = None
@@ -703,6 +706,7 @@ class RenderContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         pygame.display.flip()
         self.font_cache.gc()
+        self.font_cache_big.gc()
         self.clock.tick()
         self.fps = self.clock.get_fps()
         return False
@@ -772,9 +776,9 @@ class RenderContext:
             position, scale, self.modelview_matrix_stack.apply
         )
 
-    def text(self, text: str, color: Color, position: Vector2):
+    def text(self, text: str, color: Color, position: Vector2, big=False):
         if text:
-            self.sprite(self.font_cache.lookup(text, color), position)
+            self.sprite((self.font_cache if not big else self.font_cache_big).lookup(text, color), position)
 
     def text_centered(self, text: str, color: Color):
         if text:
@@ -787,6 +791,11 @@ class RenderContext:
                 )
                 / 2,
             )
+
+    def text_centered_rect(self, text: str, color: Color, rect: Rect, *, z_layer: int = 0):
+        if text:
+            sprite = self.font_cache_big.lookup(text, color)
+            self.sprite(sprite, rect.topleft + (rect.size - sprite.size) / 2, z_layer=z_layer)
 
     def rect(self, color: Color, rectangle: Rect, *, z_layer: int = 0):
         self._colored_vertices(
@@ -1171,7 +1180,7 @@ class Branch(IClickReceiver):
                     ctx.modelview_matrix_stack.identity()
                     game.planet.apply_planet_surface_transform(self.plant.position)
                     self.fruit_world_position = ctx.modelview_matrix_stack.apply(
-                        topleft + Vector2(tomato.width, tomato.height) / 2
+                        topleft + tomato.size / 2
                     )
                     ctx.modelview_matrix_stack.pop()
 
@@ -1330,7 +1339,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         self.aabb = None
 
         fly_sprite = self.sprite_animation.get(ctx)
-        fly_offset = -Vector2(fly_sprite.width, fly_sprite.height) / 2
+        fly_offset = -fly_sprite.size / 2
         fly_offset.x *= direction
 
         ctx.modelview_matrix_stack.push()
@@ -1520,7 +1529,7 @@ class Spaceship(IUpdateReceiver, IDrawable):
         self.planet.apply_planet_surface_transform(self.coordinates)
         ctx.sprite(
             self.sprite,
-            -Vector2(self.sprite.width, self.sprite.height) / 2 * scale_up,
+            -self.sprite.size / 2 * scale_up,
             Vector2(scale_up, scale_up),
         )
 
@@ -1869,6 +1878,19 @@ class Window:
     def set_subtitle(self, subtitle):
         pygame.display.set_caption(f"{self.title}: {subtitle}")
 
+    def start_game_or_toggle_pause(self):
+        self.is_running = not self.is_running
+        if self.is_running:
+            if self.renderer.paused_started is not None:
+                self.renderer.started += (
+                    time.time() - self.renderer.paused_started
+                )
+            self.renderer.paused_started = None
+            self.buttons[0] = ('Play game', 'play')
+        else:
+            self.renderer.paused_started = time.time()
+            self.buttons[0] = ('Resume game', 'play')
+
     def process_events(
         self, *, mouse: IMouseReceiver, update: IUpdateReceiver, gamestate
     ):
@@ -1877,17 +1899,19 @@ class Window:
                 self.quit()
 
             if self._is_spacebar_down(event):
-                gamestate.is_running = not gamestate.is_running
-                if gamestate.is_running:
-                    if self.renderer.paused_started is not None:
-                        self.renderer.started += (
-                            time.time() - self.renderer.paused_started
-                        )
-                    self.renderer.paused_started = None
-                else:
-                    self.renderer.paused_started = time.time()
+                gamestate.start_game_or_toggle_pause()
 
-            if gamestate.is_running:
+            if not gamestate.is_running:
+                # main menu
+                if event.type == MOUSEBUTTONDOWN and event.button == LEFT_MOUSE_BUTTON:
+                    gamestate.mousedown(event.pos)
+                elif event.type == MOUSEMOTION and event.buttons:
+                    gamestate.mousemove(event.pos)
+                elif event.type == MOUSEBUTTONUP and event.button == LEFT_MOUSE_BUTTON:
+                    gamestate.mouseup(event.pos)
+                elif event.type == MOUSEWHEEL:
+                    gamestate.mousewheel(event.x, event.y, event.flipped)
+            elif gamestate.is_running:
                 if event.type == MOUSEBUTTONDOWN and event.button == LEFT_MOUSE_BUTTON:
                     mouse.mousedown(event.pos)
                 elif event.type == MOUSEMOTION and event.buttons:
@@ -1900,7 +1924,7 @@ class Window:
                     update.update()
 
     def _is_spacebar_down(self, event):
-        return event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
+        return event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
 
     def quit(self):
         pygame.quit()
@@ -1942,7 +1966,7 @@ class HarvestedTomato(IUpdateReceiver, IDrawable):
         self.position = (1 - alpha) * self.start_position + alpha * self.target_position
 
     def draw(self, ctx):
-        ctx.sprite(self.sprite, self.position - Vector2(self.sprite.width, self.sprite.height) / 2)
+        ctx.sprite(self.sprite, self.position - self.sprite.size / 2)
 
 
 class Game(Window, IUpdateReceiver, IMouseReceiver):
@@ -2001,6 +2025,16 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.harvest_on_mouseup = False
         self.harvested_tomatoes = []
 
+        self.buttons = [
+                ('Play Game', 'play'),
+                ('Instructions', 'help'),
+                ('Credits', 'credits'),
+                ('Quit', 'quit'),
+        ]
+        self.active_button = None
+        self.want_instructions = False
+        self.want_credits = False
+
     @property
     def is_startup(self):
         return self.spaceship.ticks == 0
@@ -2052,6 +2086,23 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             sector.invalidate_aabb()
 
     def mousedown(self, position: Vector2):
+        if self.want_instructions:
+            self.want_instructions = False
+
+        if self.want_credits:
+            self.want_credits = False
+
+        if (self.is_startup or not self.is_running) and self.active_button is not None:
+            label, action = self.active_button
+            if action == 'play':
+                self.start_game_or_toggle_pause()
+            elif action == 'help':
+                self.want_instructions = True
+            elif action == 'credits':
+                self.want_credits = True
+            elif action == 'quit':
+                self.quit()
+
         for label, color, rect, obj, priority in sorted(
             self.debug_aabb, key=lambda t: t[-1]
         ):
@@ -2136,12 +2187,24 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         ctx.flush()
 
-    def render_instructions(self, ctx):
-        if self.is_startup:
-            MSG = "Press SPACEBAR to start, control with the mouse. SPACEBAR to toggle pause."
-        else:
-            MSG = "Game paused. Press SPACEBAR to continue your quest."
+    def render_credits(self,ctx):
+        self._draw_lines_over(
+            ctx,
+            textwrap.dedent("""
+        A PyWeek#34 entry by the Python User Group
+        in Vienna, Austria (https://pyug.at/).
 
+        Authors:
+            Christian Knittl-Frank,
+            Paul Reiter,
+            Claus Aichinger and
+            Thomas Perl.
+
+        See ARTWORK.md for a list of third party
+        sound and graphic artwork used in this game.
+        """).splitlines(), big=True)
+
+    def render_instructions(self, ctx):
         self._draw_lines_over(
             ctx,
             textwrap.dedent(
@@ -2157,10 +2220,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             Click on a fly (within the atmosphere) to kick it out of orbit.
             Click on the roots of plants to cut them off and let a new one sprout.
             A plant will only grow tomatoes once! Cut it off to grow a new one.
-
-        {CREDITS}
-
-            {MSG}
         """
             ).splitlines(),
         )
@@ -2174,7 +2233,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         Prepare for evacuation immediately!
 
             But also, thanks for playing our little game -- try again, maybe?
-        {CREDITS}
         """
             ).splitlines()
         )
@@ -2188,19 +2246,19 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         Good job!
 
             And thanks for playing our little game, hope you enjoyed it :)
-        {CREDITS}
         """
             ).splitlines()
         )
 
-    def _draw_lines_over(self, ctx, lines):
-        initial_position = 180
-        offset = 25
+    def _draw_lines_over(self, ctx, lines, big=False):
+        offset = 30 if big else 25
+        initial_position = (self.height - len(lines) * offset) / 2
         for i, line in enumerate(lines):
             ctx.text(
                 line,
                 Color(255, 255, 255) if line.startswith("    ") else Color(30, 255, 230),
-                Vector2(220, initial_position + i * offset),
+                Vector2(330 if big else 220, initial_position + i * offset),
+                big=big
             )
         ctx.flush()
 
@@ -2308,6 +2366,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                             )
                         break
 
+            if not self.is_running:
+                self.cursor_mode = None
+
             if self.cursor_mode:
                 pygame.mouse.set_visible(False)
                 sprite = self.artwork.get_cursor(self.cursor_mode)
@@ -2316,9 +2377,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                     sprite = sprite[left_mouse_pressed]
 
                 cursor_position = (
-                    Vector2(mouse_pos) - Vector2(sprite.img.get_size()) / 2
+                    Vector2(mouse_pos) - sprite.size / 2
                 )
-                cursor_center_offset = Vector2(sprite.width, sprite.height) / 2
+                cursor_center_offset = sprite.size / 2
 
                 ctx.modelview_matrix_stack.push()
                 if self.cursor_planet_coordinate is not None:
@@ -2363,9 +2424,54 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 ctx.rect(Color(0, 0, 0, 200), Rect(0, 0, self.width, self.height))
                 ctx.flush()
 
-                ctx.sprite(self.artwork.logo, Vector2(220, 50))
-                self.render_instructions(ctx)
+                bg_pos = Vector2((self.width - self.artwork.logo_bg.width) / 2, 20)
+
+                ctx.sprite(self.artwork.logo_bg, bg_pos)
+
+                scl = 1 + .1*math.sin(ctx.now*6.4)
+                scaling = Vector2(scl, scl)
+
+                fg_pos = Vector2((self.width - self.artwork.logo_bg.width * scl) / 2,
+                                  30 - (scl - 1) * self.artwork.logo_bg.height / 2 - 10 + 3 * math.sin(ctx.now*3.3))
+
+                ctx.sprite(self.artwork.logo_text, fg_pos, scale=scaling)
+
+                btn_width = 400
+                btn_height = 60
+                spacing = 10
+
+                top_margin = self.artwork.logo_text.height
+
+                x = (self.width - btn_width) / 2
+                y = top_margin + (self.height - top_margin - len(self.buttons) * btn_height - (len(self.buttons) - 1) * spacing) / 2
+
+                self.active_button = None
+                for label, key in self.buttons:
+                    rr = Rect(x, y, btn_width, btn_height)
+                    if rr.collidepoint(pygame.mouse.get_pos()) and not self.want_instructions and not self.want_credits:
+                        color = Color(90, 90, 90)
+                        self.active_button = (label, key)
+                    else:
+                        color = Color(50, 50, 50)
+                    ctx.rect(color, rr, z_layer=ctx.LAYER_BTN_BG)
+                    ctx.text_centered_rect(label, Color(255, 255, 255), rr, z_layer=ctx.LAYER_BTN_TEXT)
+                    y += btn_height + spacing
+
                 ctx.flush()
+
+                if self.want_instructions:
+                    self.active_button = None
+                    ctx.rect(Color(0, 0, 0, 230), Rect(0, 0, self.width, self.height))
+                    ctx.flush()
+                    self.render_instructions(ctx)
+                    ctx.flush()
+
+                if self.want_credits:
+                    self.active_button = None
+                    ctx.rect(Color(0, 0, 0, 230), Rect(0, 0, self.width, self.height))
+                    ctx.flush()
+                    self.render_credits(ctx)
+                    ctx.flush()
 
 
 def main():
