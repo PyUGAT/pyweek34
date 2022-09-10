@@ -2287,30 +2287,35 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         )
 
     def render_gameover_flies_win(self):
-        self._draw_lines(
-            textwrap.dedent(
-                f"""
-        Oh nooo! It's too late!
-        They got all the space tomatoes they need...
-        Prepare for evacuation immediately!
+        with self.renderer as ctx:
+            ctx.clear(Color(10, 10, 20))
+            self._draw_lines_over(
+                ctx,
+                textwrap.dedent("""
+            Oh nooo! It's too late!
+            They got all the space tomatoes they need...
+            Prepare for evacuation immediately!
 
-            But also, thanks for playing our little game -- try again, maybe?
-        """
-            ).splitlines()
-        )
+            But also, thanks for playing our
+            little game -- try again, maybe?
+            """).splitlines(), big=True)
+            ctx.flush()
 
     def render_gameover_player_wins(self):
-        self._draw_lines(
-            textwrap.dedent(
-                f"""
-        Oh yesss! You did it!
-        We finally have enough tomatoes to ketchdown the flies.
-        Good job!
+        with self.renderer as ctx:
+            ctx.clear(Color(10, 10, 20))
+            self._draw_lines_over(
+                ctx,
+                textwrap.dedent("""
+            Oh yesss! You did it!
+            We finally have enough tomatoes
+            to ketchdown the flies.
+            Good job!
 
-            And thanks for playing our little game, hope you enjoyed it :)
-        """
-            ).splitlines()
-        )
+            And thanks for playing our little
+            game, we hope you enjoyed it :)
+            """).splitlines(), big=True)
+            ctx.flush()
 
     def _draw_lines_over(self, ctx, lines, big=False):
         offset = 30 if big else 25
@@ -2323,21 +2328,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 big=big
             )
         ctx.flush()
-
-    def _draw_lines(self, lines):
-        with self.renderer as ctx:
-            ctx.clear(Color(0, 0, 0))
-            initial_position = 100
-            offset = 25
-            for i, line in enumerate(lines):
-                ctx.text(
-                    line,
-                    Color(255, 80, 30)
-                    if line.startswith("    ")
-                    else Color(30, 255, 180),
-                    Vector2(100, initial_position + i * offset),
-                )
-            ctx.flush()
 
     def render_scene(self, *, paused=False, startup=False):
         with self.renderer as ctx:
