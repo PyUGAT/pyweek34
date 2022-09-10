@@ -61,7 +61,7 @@ logging.basicConfig(
 
 class ImportantParameterAffectingGameplay:
     GAMEOVER_THRESHOLD_FLIES_WIN = (
-        10 if CLIARGS.fast else 15
+        4 if CLIARGS.fast else 15
     )  # Flies win when they steal N tomatoes
     GAMEOVER_THRESHOLD_PLAYER_WINS = (
         4 if CLIARGS.fast else 30
@@ -2301,9 +2301,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             ctx.clear(Color(10, 10, 20))
             self._draw_lines_over(
                 ctx,
-                textwrap.dedent("""
+                textwrap.dedent(f"""
             Oh nooo! It's too late!
-            They got all the space tomatoes they need...
+            They got all the {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} space tomatoes they need...
             Prepare for evacuation immediately!
 
             But also, thanks for playing our
@@ -2316,10 +2316,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             ctx.clear(Color(10, 10, 20))
             self._draw_lines_over(
                 ctx,
-                textwrap.dedent("""
+                textwrap.dedent(f"""
             Oh yesss! You did it!
-            We finally have enough tomatoes
-            to ketchdown the flies.
+            With these additional {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} space tomatoes
+            we will finally ketchdown the flies.
             Good job!
 
             And thanks for playing our little
