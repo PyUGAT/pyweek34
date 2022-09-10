@@ -2054,6 +2054,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 """).splitlines()),
         ]
         self.tutorial_pos = 0
+        self.tutorial_pageflip_time = 0
 
         self.buttons = [
                 ('Play Game', 'play'),
@@ -2127,6 +2128,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         if self.want_tutorial:
             self.tutorial_pos += 1
+            self.tutorial_pageflip_time = time.time()
             if self.tutorial_pos == len(self.tutorial):
                 self.start_game_or_toggle_pause()
                 self.want_tutorial = False
@@ -2138,6 +2140,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                     self.start_game_or_toggle_pause()
                 else:
                     self.want_tutorial = True
+                    self.tutorial_pageflip_time = time.time()
             elif action == 'help':
                 self.want_instructions = True
             elif action == 'credits':
@@ -2272,6 +2275,11 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         ctx.sprite(tutline, Vector2(max(xpos, xpos + max_line_width - tutline.width), ypos + 20))
         ctx.flush()
 
+        tuta = self.get_tutorial_alpha()
+        if tuta < 1:
+            ctx.rect(Color(10, 10, 20, 255 - int(255 * tuta)), Rect(0, 0, self.width, self.height))
+            ctx.flush()
+
     def render_instructions(self, ctx):
         self._draw_lines_over(
             ctx,
@@ -2329,6 +2337,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 big=big
             )
         ctx.flush()
+
+    def get_tutorial_alpha(self):
+        return min(1, max(0, (time.time() - self.tutorial_pageflip_time) / .4))
 
     def render_scene(self, *, paused=False, startup=False):
         with self.renderer as ctx:
