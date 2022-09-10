@@ -61,20 +61,20 @@ logging.basicConfig(
 
 class ImportantParameterAffectingGameplay:
     GAMEOVER_THRESHOLD_FLIES_WIN = (
-        10 if CLIARGS.fast else 20
+        10 if CLIARGS.fast else 15
     )  # Flies win when they steal N tomatoes
     GAMEOVER_THRESHOLD_PLAYER_WINS = (
-        4 if CLIARGS.fast else 50
+        4 if CLIARGS.fast else 30
     )  # Player wins when harvested N tomatoes
     BREEDING_EVERY_N_TICKS = (
-        100 if CLIARGS.fast else 500
+        100 if CLIARGS.fast else 400
     )  # Reproduction interval to maintain MIN_NUM_FLIES, increase/decrease value to slow down/seep up reproduction
     MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = (
-        100 if CLIARGS.fast else 1000
+        10 if CLIARGS.fast else 50
     )  # How often the spaceship changes location, increase/decrease value to decrease/increase changes
     TOMATO_TO_FLY = 1  # N collected tomatoes result in 1 fly; min value 1, increase to slow down reproduction
-    MIN_NUM_FLIES = 2  # There are at least N flies
-    MAX_NUM_FLIES = 4  # There are at most N flies
+    MIN_NUM_FLIES = 3  # There are at least N flies
+    MAX_NUM_FLIES = 12  # There are at most N flies
     GROWTH_SPEED = (
         100 if CLIARGS.fast else 3
     )  # How fast the plants grow, increase/decrease value to speed up/slow down growth
@@ -1239,7 +1239,7 @@ class Planet(IDrawable):
 class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
     AABB_PADDING_PX = 40
     CURSOR = "hunt"
-    FLYING_SPEED_CARRYING = 1
+    FLYING_SPEED_CARRYING = 1.5
     FLYING_SPEED_NON_CARRYING = 3
 
     def __init__(self, game, spaceship, artwork, phase):
@@ -1469,7 +1469,9 @@ class Spaceship(IUpdateReceiver, IDrawable):
     def pick_target_sector(self):
         if CLIARGS.debug:
             return self.game.sectors[0]
-        return random.choice(self.game.sectors)
+        sectors_with_ripe_fruits = [sector for sector in self.game.sectors if len(sector.ripe_fruits) > 0]
+        sectors_to_choose = sectors_with_ripe_fruits or self.game.sectors
+        return random.choice(sectors_to_choose)
 
     def get_world_position(self):
         return self.planet.at(self.coordinates)
@@ -1481,7 +1483,6 @@ class Spaceship(IUpdateReceiver, IDrawable):
             self.breed_flies_if_needed()
 
         if self.is_time_to_move_to_other_sector() and self.current_sector_cleared():
-            # pick another sector
             self.target_sector = self.pick_target_sector()
 
         now = self.game.renderer.now
@@ -1879,6 +1880,7 @@ class Window:
         pygame.display.set_caption(f"{self.title}: {subtitle}")
 
     def start_game_or_toggle_pause(self):
+        print('in start_game_or_toggle_pause')
         self.game_has_started = True
         self.is_running = not self.is_running
         if self.is_running:
@@ -1893,7 +1895,7 @@ class Window:
             self.buttons[0] = ('Resume Game', 'play')
 
     def process_events(
-        self, *, mouse: IMouseReceiver, update: IUpdateReceiver, gamestate
+        self, *, mouse: IMouseReceiver, update: IUpdateReceiver, gamestate: Game
     ):
         for event in pygame.event.get():
             if event.type == QUIT:
