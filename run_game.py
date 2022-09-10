@@ -1335,8 +1335,6 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
 
         if self.trash_time > 0:
             # Fly escapes into space
-            # approx_height = (self.root.length*self.growth/100)
-            # ctx.modelview_matrix_stack.translate(0, -self.trash_time*10)
             ctx.modelview_matrix_stack.translate(
                 *(self.get_world_position().normalize() * (10 * self.trash_time))
             )
@@ -1345,9 +1343,14 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
                 self.trash_time * 0.1 * self.trash_rotation_direction
             )
             ctx.modelview_matrix_stack.translate(*-self.get_world_position())
-            # ctx.modelview_matrix_stack.translate(+position.x, +position.y)
+        else:
+            # Rotate sprite so that it aligns with the planet surface
+            ctx.modelview_matrix_stack.translate(*self.get_world_position())
+            ctx.modelview_matrix_stack.rotate(
+                self.spaceship.coordinates.angle_degrees / 180 * math.pi
+            )
+            ctx.modelview_matrix_stack.translate(*-self.get_world_position())
 
-        # FIXME: Rotation is all off, should use the current sector's modelview
         corners = ctx.sprite(
             fly_sprite,
             position,
