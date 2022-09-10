@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Utility script to package our game for PyWeek:
-1. Copy relevant files to dist/TheRedPlanted/
-2. Try to run the game by calling `python dist/TheRedPlanted/run_game.py`
+1. Copy relevant files to dist/RedPlanted/
+2. Try to run the game by calling `python dist/RedPlanted/run_game.py`
 3. If running the game succeeds, create a ZIP archive for upload
 """
 import os
