@@ -1880,7 +1880,6 @@ class Window:
         pygame.display.set_caption(f"{self.title}: {subtitle}")
 
     def start_game_or_toggle_pause(self):
-        print('in start_game_or_toggle_pause')
         self.game_has_started = True
         self.is_running = not self.is_running
         if self.is_running:
