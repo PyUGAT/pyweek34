@@ -1887,10 +1887,10 @@ class Window:
                     time.time() - self.renderer.paused_started
                 )
             self.renderer.paused_started = None
-            self.buttons[0] = ('Play game', 'play')
+            self.buttons[0] = ('Play Game', 'play')
         else:
             self.renderer.paused_started = time.time()
-            self.buttons[0] = ('Resume game', 'play')
+            self.buttons[0] = ('Resume Game', 'play')
 
     def process_events(
         self, *, mouse: IMouseReceiver, update: IUpdateReceiver, gamestate
@@ -2033,8 +2033,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.tutorial = [
                 (self.resources.sprite('tutorial-incoming.png'), textwrap.dedent("""
-                Commander, our sensors detected
-                a hostile flyship incoming.
+                Cmdr. Gardener, our sensors detect
+                another hostile flyship incoming.
                 """).splitlines()),
                 (self.resources.sprite('tutorial-squash.png'), textwrap.dedent(f"""
                 Fend them off and bring in our
@@ -2050,7 +2050,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 """).splitlines()),
                 (self.resources.sprite('tutorial-cut.png'), textwrap.dedent("""
                 Plants grow tomatoes only once.
-                Cut them off to let another plant grow.
+                Cut them to let another plant grow.
                 """).splitlines()),
         ]
         self.tutorial_pos = 0
