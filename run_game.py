@@ -2034,11 +2034,12 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         elif self.is_gameover_player_wins:
             self.render_gameover_player_wins()
         elif self.is_running:
-            dy = self.gui.wheel_sum.y
+            dy = (self.gui.wheel_sum.y - self.gui.wheel_sum.x)
             if dy != 0:
                 self.invalidate_aabb()
             self.rotation_angle_degrees += dy * (30000 / self.planet.get_circumfence())
             self.rotation_angle_degrees %= 360
+            self.gui.wheel_sum.x = 0
             self.gui.wheel_sum.y = 0
 
             self.set_subtitle(f"{self.renderer.fps:.0f} FPS")
