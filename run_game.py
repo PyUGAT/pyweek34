@@ -364,7 +364,6 @@ class Artwork:
         self.logo_text = resources.sprite("logo-text.png")
         self.logo_bg = resources.sprite("logo-bg.png")
 
-        # TODO: Use animated cursors
         self.cursors = {
             # None: ...,  # in case we also want a custom cursor if not on object
             "cut": {
@@ -1014,11 +1013,10 @@ class Branch(IClickReceiver):
         return self.fruit_world_position
 
     def clicked(self):
-        # TODO: Add score (check fruit_rotten first!)
         if self.has_fruit:
             self.has_fruit = False
             self.plant.shake()
-            self.plant.artwork.get_random_pick_sound().play()  # Claus-TBD: artwork from plant
+            self.plant.artwork.get_random_pick_sound().play()
             return True
 
         return False
@@ -1275,8 +1273,6 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
             return self.roaming_offset, True
 
     def clicked(self):
-        # TODO: Add score, prevent player from clicking if fly is located too far out in space
-        # Also, to simplify matters, make fruitfly with tomato invincible ;)
         is_fly_close_enough_to_surface = True
         if is_fly_close_enough_to_surface and self in self.spaceship.flies:
             logging.debug("Brzzzz... you hit a fly")
@@ -1950,7 +1946,7 @@ class Minimap(IClickReceiver):
         self.rect = Rect(self.game.width - border - size.x, border, size.x, size.y)
 
     def clicked(self):
-        # TODO: Could do something with the minimap
+        # TBD: Could do something with the minimap
         return False
 
 class HarvestedTomato(IUpdateReceiver, IDrawable):
@@ -1979,7 +1975,7 @@ class HarvestedTomato(IUpdateReceiver, IDrawable):
 class Game(Window, IUpdateReceiver, IMouseReceiver):
     def __init__(self, data_path: str = os.path.join(HERE, "data")):
         super().__init__("Red Planted -- PyWeek#34 -- https://pyweek.org/e/RedPlanted/")
-        pygame.mixer.init()  # Claus-TBD: here? In tutorials, we often see pygame.init(), which part corresponds to that?
+        pygame.mixer.init()
 
         self.resources = ResourceManager(data_path)
         self.artwork = Artwork(self.resources)
@@ -2159,7 +2155,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                         logging.debug("click was handled -> breaking out")
                         if (
                             label == LABEL_FRUIT
-                        ):  # Claus-TBD: if we process that in Branch, how does game know?
+                        ):
                             self.harvest_on_mouseup = True
                         break
 
@@ -2380,7 +2376,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
             self.drawing_minimap = True
 
-            # TODO: Draw stylized scene
             ctx.camera_mode_world(
                 self.planet, zoom=0, rotate=self.rotation_angle_degrees / 360
             )
@@ -2469,7 +2464,6 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
             ctx.flush()
 
-            # Claus-NEXT
             text = f"Tomatoes: {self.tomato_score}"
             ctx.text(
                 text,
