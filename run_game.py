@@ -363,6 +363,7 @@ class Artwork:
         self.rocks = [resources.sprite(f"rockpx{num}.png") for num in (1, 2, 3, 4)]
         self.planet = resources.sprite("mars.png")
         self.spaceship = resources.sprite("spaceship.png")
+        self.logo = resources.sprite("logo.png")
 
         # TODO: Use animated cursors
         self.cursors = {
@@ -1924,7 +1925,7 @@ class Minimap(IClickReceiver):
 
 class Game(Window, IUpdateReceiver, IMouseReceiver):
     def __init__(self, data_path: str = os.path.join(HERE, "data")):
-        super().__init__("Red Planted")
+        super().__init__("Red Planted -- PyWeek#34 -- https://pyweek.org/e/RedPlanted/")
         pygame.mixer.init()  # Claus-TBD: here? In tutorials, we often see pygame.init(), which part corresponds to that?
 
         self.resources = ResourceManager(data_path)
@@ -2098,21 +2099,22 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         ctx.flush()
 
-    def render_startup(self, ctx):
+    def render_instructions(self, ctx):
+        if self.is_startup:
+            MSG = "Press SPACEBAR to start, control with the mouse. SPACEBAR to toggle pause."
+        else:
+            MSG = "Game paused. Press SPACEBAR to continue your quest."
+
         self._draw_lines_over(
             ctx,
             textwrap.dedent(
                 f"""
-        Commander, we need your help!
-        Our sensors detected an incoming flyship.
+        Commander, our sensors detected an incoming flyship.
         Fend them off and bring in our harvest before it is too late!
-
         If the flies steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} space tomatoes, we are doomed...
-
         Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} space tomatoes and we will ketchdown the flies in this quadrant!
 
             How to play:
-
             Use the scroll wheel (or touchpad scroll) to move around the planet.
             Click on a tomato fruit to harvest it.
             Click on a fly (within the atmosphere) to kick it out of orbit.
@@ -2121,7 +2123,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         {CREDITS}
 
-            Press SPACEBAR to start, control with the mouse. SPACEBAR to toggle pause.
+            {MSG}
         """
             ).splitlines(),
         )
@@ -2155,13 +2157,13 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         )
 
     def _draw_lines_over(self, ctx, lines):
-        initial_position = 50
+        initial_position = 180
         offset = 25
         for i, line in enumerate(lines):
             ctx.text(
                 line,
-                Color(255, 80, 30) if line.startswith("    ") else Color(30, 255, 180),
-                Vector2(100, initial_position + i * offset),
+                Color(255, 255, 255) if line.startswith("    ") else Color(30, 255, 230),
+                Vector2(220, initial_position + i * offset),
             )
         ctx.flush()
 
@@ -2322,14 +2324,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 ctx.rect(Color(0, 0, 0, 200), Rect(0, 0, self.width, self.height))
                 ctx.flush()
 
-            if paused:
-                ctx.text_centered(
-                    "Game Paused - Press SPACEBAR to continue", Color(255, 255, 255)
-                )
+                ctx.sprite(self.artwork.logo, Vector2(220, 20))
+                self.render_instructions(ctx)
                 ctx.flush()
-
-            if startup:
-                self.render_startup(ctx)
 
 
 def main():
