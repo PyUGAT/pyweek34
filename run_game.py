@@ -2062,6 +2062,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 ('Quit', 'quit'),
         ]
         self.active_button = None
+        self.active_button_time = 0
         self.want_instructions = False
         self.want_credits = False
         self.want_tutorial = False
@@ -2497,6 +2498,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 x = (self.width - btn_width) / 2
                 y = top_margin + (self.height - top_margin - len(self.buttons) * btn_height - (len(self.buttons) - 1) * spacing) / 2
 
+                last_active_button = self.active_button
                 self.active_button = None
                 for label, key in self.buttons:
                     rr = Rect(x, y, btn_width, btn_height)
@@ -2505,10 +2507,19 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                                                                     not self.want_tutorial):
                         color = Color(90, 90, 90)
                         self.active_button = (label, key)
+                        if self.active_button != last_active_button:
+                            self.active_button_time = time.time()
                     else:
                         color = Color(50, 50, 50)
                     ctx.rect(color, rr, z_layer=ctx.LAYER_BTN_BG)
-                    ctx.text_centered_rect(label, Color(255, 255, 255), rr, z_layer=ctx.LAYER_BTN_TEXT)
+                    if (label, key) == self.active_button:
+                        alpha = min(1, max(0, (time.time() - self.active_button_time) / .2))
+                        ctx.rect(Color(240, 240, 240), Rect(rr.x + rr.w * (1-alpha) / 2, rr.y, rr.w * alpha, rr.h), z_layer=ctx.LAYER_BTN_BG)
+                    else:
+                        alpha = 0
+                    rr.topleft += (1-abs(1-2*alpha)) * 10 * Vector2(math.sin(alpha*23), math.cos(alpha*23))
+                    intens = 255 - int(255 * alpha)
+                    ctx.text_centered_rect(label, Color(intens, intens, intens), rr, z_layer=ctx.LAYER_BTN_TEXT)
                     y += btn_height + spacing
 
                 ctx.flush()
