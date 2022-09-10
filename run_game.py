@@ -367,7 +367,10 @@ class Artwork:
         # TODO: Use animated cursors
         self.cursors = {
             # None: ...,  # in case we also want a custom cursor if not on object
-            "cut": resources.sprite("cursor_cut2_px.png"),
+            "cut": {
+                False: resources.sprite("cursor_cut_open_px.png"),
+                True: resources.sprite("cursor_cut_closed_px.png"),
+            },
             "harvest": resources.sprite("cursor_harvest_px.png"),
             "hunt": resources.sprite("cursor_swatter_px.png"),
         }
@@ -1967,6 +1970,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         self.is_running = False
         self.cursor_mode = None
+        self.cursor_planet_coordinate = None
 
     @property
     def is_startup(self):
@@ -2247,19 +2251,49 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
             if not left_mouse_pressed:
                 self.cursor_mode = None
+                self.cursor_planet_coordinate = None
+
                 for label, color, rect, obj, priority in sorted(
                     self.debug_aabb, key=lambda t: t[-1]
                 ):
                     if rect.collidepoint(mouse_pos):
                         self.cursor_mode = getattr(obj, "CURSOR", None)
+                        if isinstance(obj, Plant):
+                            self.cursor_planet_coordinate = getattr(
+                                obj, "position", None
+                            )
                         break
 
             if self.cursor_mode:
                 pygame.mouse.set_visible(False)
                 sprite = self.artwork.get_cursor(self.cursor_mode)
-                ctx.sprite(
-                    sprite, Vector2(mouse_pos) - Vector2(sprite.img.get_size()) / 2
+
+                if isinstance(sprite, dict):
+                    sprite = sprite[left_mouse_pressed]
+
+                cursor_position = (
+                    Vector2(mouse_pos) - Vector2(sprite.img.get_size()) / 2
                 )
+                cursor_center_offset = Vector2(sprite.width, sprite.height) / 2
+
+                ctx.modelview_matrix_stack.push()
+                if self.cursor_planet_coordinate is not None:
+                    ctx.modelview_matrix_stack.translate(
+                        *(cursor_position + cursor_center_offset)
+                    )
+                    ctx.modelview_matrix_stack.rotate(
+                        (
+                            self.rotation_angle_degrees
+                            + self.cursor_planet_coordinate.angle_degrees
+                        )
+                        / 180
+                        * math.pi
+                    )
+                    ctx.modelview_matrix_stack.translate(
+                        *-(cursor_position + cursor_center_offset)
+                    )
+                ctx.sprite(sprite, cursor_position)
+                ctx.modelview_matrix_stack.pop()
             else:
                 pygame.mouse.set_visible(True)
 
