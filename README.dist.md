@@ -33,6 +33,8 @@ python -m pip install -r requirements.txt
 If you get a libGL error and use conda for package management,
 you can solve it within your environment by `conda install -c conda-forge libstdcxx-ng`.
 
+If you use a Mac and get a `/bin/sh: sdl2-config: command not found` error,
+you can solve that with `brew install sdl2`.
 
 ## Play
 
