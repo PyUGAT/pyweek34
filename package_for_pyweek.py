@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Utility script to package our game for PyWeek:
 1. Copy relevant files to dist/TheRedPlanted/
