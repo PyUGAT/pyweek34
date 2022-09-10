@@ -6,8 +6,8 @@ import ctypes
 import math
 import os
 import random
-import time
 import textwrap
+import time
 
 import pygame
 from OpenGL.GL import *
@@ -51,21 +51,36 @@ parser.add_argument(
     "--fast", action="store_true", help="Fast growth to accelerate startup"
 )
 parser.add_argument(
-    "--no-multisample", action="store_true", help="Disable OpenGL multi-sampling (for old GPUs)"
+    "--no-multisample",
+    action="store_true",
+    help="Disable OpenGL multi-sampling (for old GPUs)",
 )
 CLIARGS = parser.parse_args()
 
 
 class ImportantParameterAffectingGameplay:
-    GAMEOVER_THRESHOLD_FLIES_WIN = 10 if CLIARGS.fast else 20  # Flies win when they steal N tomatoes
-    GAMEOVER_THRESHOLD_PLAYER_WINS = 2 if CLIARGS.fast else 50  # Player wins when harvested N tomatoes
-    BREEDING_EVERY_N_TICKS = 100 if CLIARGS.fast else 500  # Reproduction interval to maintain MIN_NUM_FLIES, increase/decrease value to slow down/seep up reproduction
-    MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = 100 if CLIARGS.fast else 1000  # How often the spaceship changes location, increase/decrease value to decrease/increase changes
+    GAMEOVER_THRESHOLD_FLIES_WIN = (
+        10 if CLIARGS.fast else 20
+    )  # Flies win when they steal N tomatoes
+    GAMEOVER_THRESHOLD_PLAYER_WINS = (
+        2 if CLIARGS.fast else 50
+    )  # Player wins when harvested N tomatoes
+    BREEDING_EVERY_N_TICKS = (
+        100 if CLIARGS.fast else 500
+    )  # Reproduction interval to maintain MIN_NUM_FLIES, increase/decrease value to slow down/seep up reproduction
+    MOVING_TO_OTHER_SECTOR_EVERY_N_TICKS = (
+        100 if CLIARGS.fast else 1000
+    )  # How often the spaceship changes location, increase/decrease value to decrease/increase changes
     TOMATO_TO_FLY = 1  # N collected tomatoes result in 1 fly; min value 1, increase to slow down reproduction
     MIN_NUM_FLIES = 2  # There are at least N flies
     MAX_NUM_FLIES = 4  # There are at most N flies
-    GROWTH_SPEED = 100 if CLIARGS.fast else 3  # How fast the plants grow, increase/decrease value to speed up/slow down growth
-    FERTILITY = (10, 50)  # Increase/decrease values for stronger/weaker plants (with more/less tomatoes)
+    GROWTH_SPEED = (
+        100 if CLIARGS.fast else 3
+    )  # How fast the plants grow, increase/decrease value to speed up/slow down growth
+    FERTILITY = (
+        10,
+        50,
+    )  # Increase/decrease values for stronger/weaker plants (with more/less tomatoes)
 
 
 def multiply_3x3(a, b):
@@ -747,7 +762,14 @@ class RenderContext:
     def text_centered(self, text: str, color: Color):
         if text:
             sprite = self.font_cache.lookup(text, color)
-            self.sprite(sprite, (Vector2(self.width, self.height) - Vector2(sprite.width, sprite.height)) / 2)
+            self.sprite(
+                sprite,
+                (
+                    Vector2(self.width, self.height)
+                    - Vector2(sprite.width, sprite.height)
+                )
+                / 2,
+            )
 
     def rect(self, color: Color, rectangle: Rect, *, z_layer: int = 0):
         self._colored_vertices(
@@ -1506,8 +1528,13 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         self.sector_width_degrees = {2: 5, 3: 6, 5: 14, 6: 14}[
             self.number_of_plants
         ] * 3
-        self.fertility = int(random.uniform(*ImportantParameterAffectingGameplay.FERTILITY))
-        self.growth_speed = random.uniform(0.02, 0.06) * ImportantParameterAffectingGameplay.GROWTH_SPEED
+        self.fertility = int(
+            random.uniform(*ImportantParameterAffectingGameplay.FERTILITY)
+        )
+        self.growth_speed = (
+            random.uniform(0.02, 0.06)
+            * ImportantParameterAffectingGameplay.GROWTH_SPEED
+        )
         self.rotting_speed = random.uniform(0.01, 0.02)
         self.plants = []
         self.make_new_plants()
@@ -1839,7 +1866,9 @@ class Window:
                 gamestate.is_running = not gamestate.is_running
                 if gamestate.is_running:
                     if self.renderer.paused_started is not None:
-                        self.renderer.started += (time.time() - self.renderer.paused_started)
+                        self.renderer.started += (
+                            time.time() - self.renderer.paused_started
+                        )
                     self.renderer.paused_started = None
                 else:
                     self.renderer.paused_started = time.time()
@@ -2055,7 +2084,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         ctx.flush()
 
     def render_startup(self, ctx):
-        self._draw_lines_over(ctx, textwrap.dedent(f"""
+        self._draw_lines_over(
+            ctx,
+            textwrap.dedent(
+                f"""
         Commander, we need your help!
         Our sensors detected an incoming flyship.
         Fend them off and bring in our harvest before it is too late!
@@ -2075,27 +2107,37 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         {CREDITS}
 
             Press SPACEBAR to start, control with the mouse. SPACEBAR to toggle pause.
-        """).splitlines())
+        """
+            ).splitlines(),
+        )
 
     def render_gameover_flies_win(self):
-        self._draw_lines(textwrap.dedent(f"""
+        self._draw_lines(
+            textwrap.dedent(
+                f"""
         Oh nooo! It's too late!
         They got all the space tomatoes they need...
         Prepare for evacuation immediately!
 
             But also, thanks for playing our little game -- try again, maybe?
         {CREDITS}
-        """).splitlines())
+        """
+            ).splitlines()
+        )
 
     def render_gameover_player_wins(self):
-        self._draw_lines(textwrap.dedent(f"""
+        self._draw_lines(
+            textwrap.dedent(
+                f"""
         Oh yesss! You did it!
         We finally have enough tomatoes to ketchdown the flies.
         Good job!
 
             And thanks for playing our little game, hope you enjoyed it :)
         {CREDITS}
-        """).splitlines())
+        """
+            ).splitlines()
+        )
 
     def _draw_lines_over(self, ctx, lines):
         initial_position = 50
@@ -2103,7 +2145,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         for i, line in enumerate(lines):
             ctx.text(
                 line,
-                Color(255, 80, 30) if line.startswith('    ') else Color(30, 255, 180),
+                Color(255, 80, 30) if line.startswith("    ") else Color(30, 255, 180),
                 Vector2(100, initial_position + i * offset),
             )
         ctx.flush()
@@ -2116,7 +2158,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             for i, line in enumerate(lines):
                 ctx.text(
                     line,
-                    Color(255, 80, 30) if line.startswith('    ') else Color(30, 255, 180),
+                    Color(255, 80, 30)
+                    if line.startswith("    ")
+                    else Color(30, 255, 180),
                     Vector2(100, initial_position + i * offset),
                 )
             ctx.flush()
@@ -2227,7 +2271,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 ctx.flush()
 
             if paused:
-                ctx.text_centered("Game Paused - Press SPACEBAR to continue", Color(255, 255, 255))
+                ctx.text_centered(
+                    "Game Paused - Press SPACEBAR to continue", Color(255, 255, 255)
+                )
                 ctx.flush()
 
             if startup:
