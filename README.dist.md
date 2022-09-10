@@ -24,7 +24,7 @@ during gameplay, and press SPACEBAR again to resume gameplay.
 
 ## Installation
 
-Using Python 3
+Using Python 3.8 or newer:
 
 ```console
 python -m pip install -r requirements.txt
@@ -37,6 +37,8 @@ If you use a Mac and get a `/bin/sh: sdl2-config: command not found` error,
 you can solve that with `brew install sdl2`.
 
 ## Play
+
+To run the game:
 
 ```console
 python3 run_game.py
