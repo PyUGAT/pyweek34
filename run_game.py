@@ -1332,24 +1332,18 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         ctx.modelview_matrix_stack.push()
 
         position = pos + fly_offset * scale_up
+        rotation = self.spaceship.coordinates.angle_degrees / 180 * math.pi
 
         if self.trash_time > 0:
             # Fly escapes into space
             ctx.modelview_matrix_stack.translate(
                 *(self.get_world_position().normalize() * (10 * self.trash_time))
             )
-            ctx.modelview_matrix_stack.translate(*self.get_world_position())
-            ctx.modelview_matrix_stack.rotate(
-                self.trash_time * 0.1 * self.trash_rotation_direction
-            )
-            ctx.modelview_matrix_stack.translate(*-self.get_world_position())
-        else:
-            # Rotate sprite so that it aligns with the planet surface
-            ctx.modelview_matrix_stack.translate(*self.get_world_position())
-            ctx.modelview_matrix_stack.rotate(
-                self.spaceship.coordinates.angle_degrees / 180 * math.pi
-            )
-            ctx.modelview_matrix_stack.translate(*-self.get_world_position())
+            rotation += self.trash_time * 0.1 * self.trash_rotation_direction
+
+        ctx.modelview_matrix_stack.translate(*self.get_world_position())
+        ctx.modelview_matrix_stack.rotate(rotation)
+        ctx.modelview_matrix_stack.translate(*-self.get_world_position())
 
         corners = ctx.sprite(
             fly_sprite,
