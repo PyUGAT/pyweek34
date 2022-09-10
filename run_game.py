@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import array
 import ctypes
+import logging
 import math
 import os
 import random
@@ -56,6 +57,12 @@ parser.add_argument(
     help="Disable OpenGL multi-sampling (for old GPUs)",
 )
 CLIARGS = parser.parse_args()
+
+logging.basicConfig(
+    format="%(asctime)s - %(message)s",
+    datefmt="%d-%b-%y %H:%M:%S",
+    level=logging.DEBUG if CLIARGS.debug else logging.WARNING,
+)
 
 
 class ImportantParameterAffectingGameplay:
@@ -232,7 +239,7 @@ def test_matrix3x3():
         m = Matrix3x3()
         for v in ((100, 200), (0, 0)):
             getattr(m, method)(*args)
-            print(f"{v} -> {method}{tuple(args)} -> {m.apply(v)}")
+            logging.debug(f"{v} -> {method}{tuple(args)} -> {m.apply(v)}")
 
 
 class ImageSprite:
@@ -1253,7 +1260,7 @@ class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
         # Also, to simplify matters, make fruitfly with tomato invincible ;)
         is_fly_close_enough_to_surface = True
         if is_fly_close_enough_to_surface and self in self.spaceship.flies:
-            print("Brzzzz... you hit a fly")
+            logging.debug("Brzzzz... you hit a fly")
             self.artwork.get_random_slap_sound().play()
             self.spaceship.flies.remove(self)
             self.spaceship.dead_flies.append(self)
@@ -1546,7 +1553,7 @@ class Sector(IUpdateReceiver, IDrawable, IClickReceiver):
         return self.base_angle + self.sector_width_degrees / 2
 
     def clicked(self):
-        print(f"ouch, i'm a sector! {self.index}")
+        logging.debug(f"ouch, i'm a sector! {self.index}")
         return False
 
     def make_new_plants(self):
@@ -1677,7 +1684,7 @@ class Plant(IUpdateReceiver, IClickReceiver):
         self.trash_time = 0
 
     def clicked(self):
-        print("in class Plant.clicked")
+        logging.debug("in class Plant.clicked")
         self.sector.replant(self)
         return True
 
@@ -2014,10 +2021,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             self.debug_aabb, key=lambda t: t[-1]
         ):
             if rect.collidepoint(position):
-                print("Clicked on:", label)
+                logging.debug(f"Clicked on: {label}")
                 if isinstance(obj, IClickReceiver):
                     if obj.clicked():
-                        print("click was handled -> breaking out")
+                        logging.debug("click was handled -> breaking out")
                         if (
                             label == LABEL_FRUIT
                         ):  # Claus-TBD: if we process that in Branch, how does game know?
