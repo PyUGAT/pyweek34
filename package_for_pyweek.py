@@ -41,7 +41,7 @@ for resource in RESOURCES:
     src = Path(HERE) / resource
     dst = target_folder / resource
     if src.is_dir():
-        shutil.copytree(src, dst, dirs_exist_ok=True)
+        shutil.copytree(src, dst)
     else:
         shutil.copy(src, dst)
 
