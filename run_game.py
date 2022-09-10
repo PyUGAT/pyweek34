@@ -414,8 +414,8 @@ class Artwork:
     def get_fly(self):
         return self.fly_animation
 
-    def get_cursor(self, mode: str | None):
-        return self.cursors.get(mode, None)
+    def get_cursor(self, mode: str):
+        return self.cursors[mode]
 
     def get_random_pick_sound(self):
         return random.choice(self.pick)
@@ -1966,6 +1966,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         ]
 
         self.is_running = False
+        self.cursor_mode = None
 
     @property
     def is_startup(self):
@@ -2241,20 +2242,27 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             ctx.flush()
 
             # Update the cursor dependent on what is below
+            left_mouse_pressed, *_ = pygame.mouse.get_pressed()
             mouse_pos = pygame.mouse.get_pos()
-            cursor_mode = None
-            for label, color, rect, obj, priority in sorted(
-                self.debug_aabb, key=lambda t: t[-1]
-            ):
-                if rect.collidepoint(mouse_pos):
-                    cursor_mode = getattr(obj, "CURSOR", None)
-                    break
-            sprite = self.artwork.get_cursor(cursor_mode)
-            pygame.mouse.set_visible(not bool(sprite))
-            if sprite:
+
+            if not left_mouse_pressed:
+                self.cursor_mode = None
+                for label, color, rect, obj, priority in sorted(
+                    self.debug_aabb, key=lambda t: t[-1]
+                ):
+                    if rect.collidepoint(mouse_pos):
+                        self.cursor_mode = getattr(obj, "CURSOR", None)
+                        break
+
+            if self.cursor_mode:
+                pygame.mouse.set_visible(False)
+                sprite = self.artwork.get_cursor(self.cursor_mode)
                 ctx.sprite(
                     sprite, Vector2(mouse_pos) - Vector2(sprite.img.get_size()) / 2
                 )
+            else:
+                pygame.mouse.set_visible(True)
+
             ctx.flush()
 
             # Claus-NEXT
