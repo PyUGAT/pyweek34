@@ -70,7 +70,7 @@ class ImportantParameterAffectingGameplay:
         10 if CLIARGS.fast else 20
     )  # Flies win when they steal N tomatoes
     GAMEOVER_THRESHOLD_PLAYER_WINS = (
-        2 if CLIARGS.fast else 50
+        4 if CLIARGS.fast else 50
     )  # Player wins when harvested N tomatoes
     BREEDING_EVERY_N_TICKS = (
         100 if CLIARGS.fast else 500
