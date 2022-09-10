@@ -61,10 +61,10 @@ logging.basicConfig(
 
 class ImportantParameterAffectingGameplay:
     GAMEOVER_THRESHOLD_FLIES_WIN = (
-        4 if CLIARGS.fast else 15
+        4 if CLIARGS.fast else 10
     )  # Flies win when they steal N tomatoes
     GAMEOVER_THRESHOLD_PLAYER_WINS = (
-        4 if CLIARGS.fast else 30
+        4 if CLIARGS.fast else 25
     )  # Player wins when harvested N tomatoes
     BREEDING_EVERY_N_TICKS = (
         100 if CLIARGS.fast else 400
@@ -79,7 +79,7 @@ class ImportantParameterAffectingGameplay:
         100 if CLIARGS.fast else 3
     )  # How fast the plants grow, increase/decrease value to speed up/slow down growth
     FERTILITY = (
-        10,
+        20,
         50,
     )  # Increase/decrease values for stronger/weaker plants (with more/less tomatoes)
 
@@ -1237,8 +1237,8 @@ class Planet(IDrawable):
 class FruitFly(IUpdateReceiver, IDrawable, IClickReceiver):
     AABB_PADDING_PX = 40
     CURSOR = "hunt"
-    FLYING_SPEED_CARRYING = 1.5
-    FLYING_SPEED_NON_CARRYING = 3
+    FLYING_SPEED_CARRYING = 2
+    FLYING_SPEED_NON_CARRYING = 4
 
     def __init__(self, game, spaceship, artwork, phase):
         self.game = game
