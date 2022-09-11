@@ -132,3 +132,6 @@ dmypy.json
 
 # Packaged stuff
 /sdist/
+.DS_Store
+/pyi-dist
+/pyi-build

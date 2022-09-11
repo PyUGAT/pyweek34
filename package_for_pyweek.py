@@ -9,10 +9,24 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+import argparse
+
+parser = argparse.ArgumentParser(description='Package the game for PyWeek')
+parser.add_argument('--convert-icons', action='store_true', help='Convert appicon.png to ICNS/ICO')
+parser.add_argument('--smoketest', action='store_true', help='Run the game before packaging')
+parser.add_argument('--macos-bundle', action='store_true', help='Build macOS app bundle (on macOS)')
+
+args = parser.parse_args()
 
 githash = subprocess.check_output(
     ["git", "describe", "--always", "--tags", "--long"], encoding="utf-8"
 ).strip()
+
+if args.convert_icons:
+    # Use ImageMagick to convert PNG icon to Win32/macOS icon formats
+    print('Using ImageMagick to convert app icon...')
+    subprocess.check_call(['convert', 'appicon.png', 'appicon.ico'])
+    subprocess.check_call(['convert', 'appicon.png', 'appicon.icns'])
 
 # Configuration
 PACKAGE_NAME = f"RedPlanted-{githash}"
@@ -20,7 +34,8 @@ RESOURCES = [
     "data",
     "run_game.py",
     "requirements.txt",
-    "ARTWORK.md",
+    "ARTWORK.txt",
+    "LICENSE.txt",
 ]
 HERE = os.path.dirname(__file__)
 DST = "sdist"
@@ -49,21 +64,38 @@ for resource in RESOURCES:
 readme = target_folder / "README.md"
 readme.write_text(README)
 
-# run game
-print(
-    "Will try to run the game now. Check if everything works and then close the window."
-)
-completed_process = subprocess.run(
-    [
-        "python3",
-        "run_game.py",
-    ],
-    check=False,
-    cwd=target_folder,
-)
+if args.smoketest:
+    print('Running smoketest... (close the game after testing)')
+    subprocess.check_call(['python3', 'run_game.py'], cwd=target_folder)
 
-# if okay, create archive
-if completed_process.returncode == 0:
-    print("Creating ZIP...")
-    shutil.make_archive(target_folder, "zip", target_folder)
-    print(r"Created ZIP archive! \o/")
+if args.macos_bundle:
+    # macOS package
+    subprocess.check_call([
+        'pyinstaller',
+        '--onefile',
+        '--windowed',
+        '--noconfirm',
+        '--add-data', 'data:data',
+        '--icon', 'appicon.icns',
+        '--osx-bundle-identifier', 'at.pyugat.pyweek34',
+        '--name', 'Red Planted',
+        '--distpath', 'pyi-dist',
+        '--workpath', 'pyi-build',
+        'run_game.py',
+    ])
+    os.chdir('pyi-dist')
+    with open('README.md', 'w') as fp:
+        fp.write(README)
+    shutil.copy('../ARTWORK.txt', '.')
+    shutil.copy('../LICENSE.txt', '.')
+    subprocess.check_call(['zip', '-r', f'../sdist/RedPlanted-{githash}-macOS.zip',
+        'Red Planted.app',
+        'README.md',
+        'ARTWORK.txt',
+        'LICENSE.txt',
+    ])
+    os.chdir('..')
+
+print("Creating ZIP...")
+shutil.make_archive(target_folder, "zip", target_folder)
+print(r"Created ZIP archive! \o/")

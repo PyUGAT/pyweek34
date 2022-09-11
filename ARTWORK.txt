@@ -1,0 +1,116 @@
+== Sources and licenses for our artwork ==
+
+Unmodified source images and in-between sources can be found in
+the source/Git distribution in "docs/original_artwork/".
+
+We used the following third party artwork (sometimes customized
+for the game) in our game:
+
+data/font/RobotoMono-SemiBold.ttf
+    Source: https://fonts.google.com/specimen/Roboto
+    License: Apache License 2.0
+
+data/image/cursor_cut_closed_px.png
+data/image/cursor_cut_open_px.png
+    Source: https://www.rawpixel.com/image/6488381/png-sticker-vintage
+    License: Public Domain
+    Customized in GIMP by thp
+
+data/image/cursor_harvest_grab_px.png
+data/image/cursor_harvest_px.png
+    Source: https://www.rawpixel.com/image/6870635/png-sticker-public-domain
+    License: Public Domain
+    Customized in GIMP by thp
+
+data/image/cursor_swatter_px.png
+    Source: https://openclipart.org/detail/2469/fly-swatter
+    License: CC-0 Public Domain
+    Author: liftarn
+
+data/image/cursor_swatter_hit_px.png
+    Source: https://openclipart.org/detail/211412/splat
+    License: CC-0 Public Domain
+    Author: Sev
+    Customized in GIMP by thp
+
+data/image/fly1.png
+data/image/fly2.png
+    Source: https://opengameart.org/content/happy-fly-enemy-game-character
+    License: CC-0 Public Domain
+    Author: bevouliin.com
+
+data/image/leafpx1.png
+data/image/leafpx2.png
+data/image/leafpx3.png
+    Source: https://opengameart.org/content/stylized-branches-texture
+    License: CC-0 Public Domain
+    Customized in GIMP by thp
+
+data/image/logo-bg.png
+data/image/logo-text.png
+    Source: Created by thp from scratch in Inkscape (mars part see mars.png)
+    License: CC-0 Public Domain
+    Remarks: Source in docs/original_artwork/logo.svg; Font: Zenith BRK
+    Font Used: https://www.1001fonts.com/zenith-brk-font.html
+
+data/image/mars.png
+    Source: https://www.publicdomainpictures.net/de/view-image.php?image=86459&picture=mars
+    License: CC-0 Public Domain
+    Author: Dawn Hudson
+    Customized in GIMP by thp
+
+data/image/rockpx1.png
+data/image/rockpx2.png
+data/image/rockpx3.png
+data/image/rockpx4.png
+    Source: https://opengameart.org/node/50434
+    License: CC-0 Public Domain
+    Author: phobi
+    Customized in GIMP by thp
+
+data/image/spaceship.png
+    Source: https://opengameart.org/content/digit1024-graphics-starship
+    License: CC-0 Public Domain
+    Author: digit1024
+
+data/image/tomato-bad.png
+data/image/tomatopx-fresh.png
+data/image/tomatopx-ripe.png
+data/image/tomatopx-yellow.png
+    Source: https://opengameart.org/content/good-fruits-m484-games
+    Original author: Master484
+    Customized and redrawn in GIMP by thp
+
+data/image/tutorial-cut.png
+data/image/tutorial-harvest.png
+data/image/tutorial-incoming.png
+data/image/tutorial-squash.png
+data/image/tutorial-steal.png
+    Source: In-game screenshots of the game
+
+data/sound/mowing1.wav
+data/sound/mowing2.wav
+data/sound/mowing3.wav
+    Source: https://freesound.org/people/blukotek/sounds/251660/
+    License: CC-0 Public Domain
+    Author: blukotek
+    Parts cut out in Audacity by thp
+
+data/sound/pick1.wav
+    Source: https://freesound.org/people/LampEight/sounds/400639/
+    License: CC-0 Public Domain
+    Author: LampEight
+    Parts cut out in Audacity by thp
+
+data/sound/ripe.wav
+    Source: https://freesound.org/people/greenvwbeetle/sounds/328118/
+    License: CC-0 Public Domain
+    Author: greenvwbeetle
+
+data/sound/slap1.wav
+data/sound/slap2.wav
+data/sound/slap3.wav
+    Source: https://freesound.org/people/florianreichelt/sounds/460509/
+    License: CC-0 Public Domain
+    Author: florianreichelt
+    Parts cut out in Audacity by thp
