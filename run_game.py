@@ -1954,8 +1954,7 @@ class Window:
         return event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
 
     def quit(self):
-        pygame.quit()
-        quit()
+        raise SystemExit()
 
 
 class Minimap(IClickReceiver):

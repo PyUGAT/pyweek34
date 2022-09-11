@@ -10,11 +10,13 @@ import shutil
 import subprocess
 from pathlib import Path
 import argparse
+import zipfile
 
 parser = argparse.ArgumentParser(description='Package the game for PyWeek')
 parser.add_argument('--convert-icons', action='store_true', help='Convert appicon.png to ICNS/ICO')
 parser.add_argument('--smoketest', action='store_true', help='Run the game before packaging')
 parser.add_argument('--macos-bundle', action='store_true', help='Build macOS app bundle (on macOS)')
+parser.add_argument('--windows-exe', action='store_true', help='Build Windows .exe (on Windows)')
 
 args = parser.parse_args()
 
@@ -95,6 +97,28 @@ if args.macos_bundle:
         'LICENSE.txt',
     ])
     os.chdir('..')
+
+if args.windows_exe:
+    # macOS package
+    subprocess.check_call([
+        'pyinstaller.exe',
+        '--onefile',
+        '--windowed',
+        '--noconfirm',
+        '--add-data', 'data;data',
+        '--icon', 'appicon.ico',
+        '--name', 'Red Planted',
+        '--distpath', 'pyi-dist',
+        '--workpath', 'pyi-build',
+        'run_game.py',
+    ])
+
+    with zipfile.ZipFile(os.path.join('sdist', f'RedPlanted-{githash}-Windows.zip'), 'w',
+                         compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        zf.writestr('README.md', README)
+        zf.write('ARTWORK.txt')
+        zf.write('LICENSE.txt')
+        zf.write(os.path.join('pyi-dist', 'Red Planted.exe'), 'Red Planted.exe')
 
 print("Creating ZIP...")
 shutil.make_archive(target_folder, "zip", target_folder)
