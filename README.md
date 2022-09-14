@@ -5,6 +5,7 @@ PyUGAT's project repository for PyWeek 34.
 - [PyWeek entry](https://pyweek.org/e/RedPlanted/)
 - [PyUGAT PyWeek](https://pyug.at/PyWeek)
 - [PyConSK lightning talk by thp](https://youtu.be/yvEUoTkUoiA?t=34035)
+- [Game artwork on OpenGameArt.org](https://opengameart.org/content/red-planted-game-artwork)
 
 ## Play
 
