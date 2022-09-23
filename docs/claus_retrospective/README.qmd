@@ -1,0 +1,154 @@
+---
+format:
+    revealjs:
+        footer: "PyUGAT meetup 2022-09-22 - PyWeek #34: A personal retrospective - Claus Aichinger"
+        incremental: false  ## https://quarto.org/docs/presentations/revealjs/#incremental-lists
+        theme: simple  ## https://quarto.org/docs/presentations/revealjs/#themes
+        logo: https://s3.eu-west-2.amazonaws.com/media.pyweek.org/34/RedPlanted/Screenshot_2022-09-11_at_01.09.26.png-thumb.png
+# to render with [Quarto](https://quarto.org/): `$ quarto render slides.qmd --to revealjs`
+---
+
+# PyWeek #34
+
+A personal (and incomplete) retrospective
+
+![](https://user-images.githubusercontent.com/135241/189221169-7431e9c2-c468-442b-9096-ad84c2c187cb.gif)
+
+*Joint presentation & discussion with thp at meetup.*
+
+---
+
+# It was awesome!
+
+🌱 🍅 🪰 🪐 🚀 🕹️ 🥳
+
+Let's do that again.
+
+---
+
+## Retrospective 🤔
+
+Typical questions:
+
+* What did I like?
+* What did I learn?
+* What did surprise me?
+* What would I do differently next time?
+* What made me think?
+
+*A few selected aspects.*
+
+---
+
+## Idea Generation ✨
+
+* [Initial issue](https://github.com/PyUGAT/pyweek34/issues/2) (see references therein)
+* [Initial discussion](https://github.com/PyUGAT/pyweek34/tree/main/docs/init_discussion)
+  * Sharing of ideas
+  * Experimenting with stories
+  * Final "10 minute to prepare pitch and then present your idea" to make decision
+
+It was beautiful to see how a simple keyword "The Red Planet"
+inspired so many ideas!
+
+---
+
+## Being Open for Ideas vs. Limiting Complexity ⚙️
+
+For me tricky to balance.
+
+---
+
+## Coordination & Communication 🗨️
+
+* GitHub
+  * Targeted issues
+  * Newsfeed issue to keep everyone in the loop
+    * Post intermediate updates...
+* Daily at 20:00 for those who can join
+
+Worked well.
+Outreach issues (easily accessible) were not answered.
+
+---
+
+## Documentation 📝
+
+* Make is easier for other so see what happens and join
+* Becomes outdated easily
+* Is anyone reading it? Does the potentially joining person even exist?
+
+Tricky to balance.
+
+---
+
+## Technical Collaboration 💻
+
+* Personal folder for initial experiments
+* Everyone on `main` (with brief `pull-commit-push` cycle)
+* Personal meeting in Metalab (without meeting though ;)
+
+Worked well.
+Fast development pace makes it difficult for later comers to join?
+
+---
+
+## Complexity :
+
+* Different coordinate systems
+* Rotation
+* Zoom
+* Camera views
+* Performance optimization
+
+Many aspects to consider...
+
+---
+
+## Team 🧑‍🤝‍🧑
+
+* Very valuable to have someone with experience 😉
+* Varied resources vs. time frame
+
+---
+
+## Style & Art 🎨
+
+* Images, sounds, ...
+* Obviously very important but even more important than I thought.
+* Fun to work on artistic aspects.
+
+Nice opportunity to include others.
+
+---
+
+## Playtesting I 🕹️
+
+* Does the game make sense?
+
+In my opinion the idea of the game had to change slightly
+to introduce competition "player vs. flies".
+Was not obvious initially - too carried away by the idea?
+Interesting to see.
+
+---
+
+## Playtesting II 🕹️
+
+* Introduced various ways to speed up
+
+That was very helpful because after some time it's
+surprisingly annoying to experiment.
+
+---
+
+## Playtesting III 🕹️
+
+* Is it fun?
+* Is it self explaining?
+* Does it work?
+* What happens when someone who is not familiar with game plays it?
+
+Interesting to see contrast, apparently not everything *obvious*.
+Requires people.
+Would be nice to have more time for that.
