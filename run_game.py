@@ -40,6 +40,7 @@ from pygame.math import Vector2
 
 from config import CLIARGS, ImportantParameterAffectingGameplay
 from vectormath import Matrix3x3
+from vectormath import aabb_from_points
 from sprite import ImageSprite
 from artwork import Artwork, ResourceManager
 
@@ -70,15 +71,6 @@ logging.basicConfig(
 )
 
 
-def aabb_from_points(points: [Vector2]):
-    """
-    Compute axis-aligned bounding box from points.
-    """
-    x = min(point.x for point in points)
-    y = min(point.y for point in points)
-    w = max(point.x for point in points) - x
-    h = max(point.y for point in points) - y
-    return Rect(x, y, w, h)
 
 
 class IDrawTask:

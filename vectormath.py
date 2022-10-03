@@ -152,3 +152,19 @@ def test_matrix3x3():
         for v in ((100, 200), (0, 0)):
             getattr(m, method)(*args)
             # logging.debug(f"{v} -> {method}{tuple(args)} -> {m.apply(v)}")  #  TODO
+
+
+from pygame import Vector2
+from pygame import Rect
+
+
+# TODO: is this the right place?
+def aabb_from_points(points: [Vector2]):
+    """
+    Compute axis-aligned bounding box from points.
+    """
+    x = min(point.x for point in points)
+    y = min(point.y for point in points)
+    w = max(point.x for point in points) - x
+    h = max(point.y for point in points) - y
+    return Rect(x, y, w, h)
