@@ -1,14 +1,14 @@
-import random
-from gui import IClickReceiver, IUpdateReceiver, IDrawable
-from artwork import Artwork
-from pygame.math import Vector2
-from pygame import Rect
-import math
-from pygame import Color
-from vectormath import aabb_from_points
 import logging
+import math
+import random
 
+from pygame import Color, Rect
+from pygame.math import Vector2
+
+from artwork import Artwork
 from config import CLIARGS, ImportantParameterAffectingGameplay
+from gui import IClickReceiver, IDrawable, IUpdateReceiver
+from vectormath import aabb_from_points
 
 (
     CLICK_PRIORITY_FRUIT,
@@ -509,7 +509,9 @@ class Spaceship(IUpdateReceiver, IDrawable):
     def pick_target_sector(self):
         if CLIARGS.debug:
             return self.game.sectors[0]
-        sectors_with_ripe_fruits = [sector for sector in self.game.sectors if len(sector.ripe_fruits) > 0]
+        sectors_with_ripe_fruits = [
+            sector for sector in self.game.sectors if len(sector.ripe_fruits) > 0
+        ]
         sectors_to_choose = sectors_with_ripe_fruits or self.game.sectors
         return random.choice(sectors_to_choose)
 

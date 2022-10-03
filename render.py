@@ -1,15 +1,15 @@
 import math
+import time
+
+import pygame
+from OpenGL.GL import *
+from pygame import Color, Rect, Vector2
+
+from artwork import ResourceManager
+from sprite import ImageSprite
 from tasks import DrawColoredVerticesTask, DrawSpriteTask
 from vectormath import Matrix3x3
-from pygame import Rect, Vector2, Color
 
-from sprite import ImageSprite
-from artwork import ResourceManager
-
-import time
-import pygame
-
-from OpenGL.GL import *
 
 class MatrixStack:
     # TODO: What is the difference between a matrix and a matrix stack - and why does it make sense?
@@ -184,7 +184,12 @@ class RenderContext:
 
     def text(self, text: str, color: Color, position: Vector2, big=False):
         if text:
-            self.sprite((self.font_cache if not big else self.font_cache_big).lookup(text, color), position)
+            self.sprite(
+                (self.font_cache if not big else self.font_cache_big).lookup(
+                    text, color
+                ),
+                position,
+            )
 
     def text_centered(self, text: str, color: Color):
         if text:
@@ -198,10 +203,14 @@ class RenderContext:
                 / 2,
             )
 
-    def text_centered_rect(self, text: str, color: Color, rect: Rect, *, z_layer: int = 0):
+    def text_centered_rect(
+        self, text: str, color: Color, rect: Rect, *, z_layer: int = 0
+    ):
         if text:
             sprite = self.font_cache_big.lookup(text, color)
-            self.sprite(sprite, rect.topleft + (rect.size - sprite.size) / 2, z_layer=z_layer)
+            self.sprite(
+                sprite, rect.topleft + (rect.size - sprite.size) / 2, z_layer=z_layer
+            )
 
     def rect(self, color: Color, rectangle: Rect, *, z_layer: int = 0):
         self._colored_vertices(

@@ -1,7 +1,6 @@
 import pygame
-from pygame.math import Vector2
-
 from OpenGL.GL import *
+from pygame.math import Vector2
 
 
 class ImageSprite:

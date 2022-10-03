@@ -5,7 +5,6 @@ TBD: different kinds of configuration
 """
 import argparse
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--debug",

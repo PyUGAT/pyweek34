@@ -154,8 +154,7 @@ def test_matrix3x3():
             # logging.debug(f"{v} -> {method}{tuple(args)} -> {m.apply(v)}")  #  TODO
 
 
-from pygame import Vector2
-from pygame import Rect
+from pygame import Rect, Vector2
 
 
 # TODO: is this the right place?

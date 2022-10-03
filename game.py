@@ -12,12 +12,14 @@ from OpenGL.GL import *
 from pygame.locals import *
 from pygame.math import Vector2
 
-from config import CLIARGS, ImportantParameterAffectingGameplay
 from artwork import Artwork, ResourceManager
+from config import CLIARGS, ImportantParameterAffectingGameplay
+from game_elements import (CLICK_PRIORITY_OTHER, LABEL_FRUIT, LABEL_MINIMAP,
+                           HarvestedTomato, Planet, PlanetSurfaceCoordinates,
+                           Plant, Rock, Sector, Spaceship)
+from gui import (DebugGUI, IClickReceiver, IMouseReceiver, IUpdateReceiver,
+                 Minimap, Window)
 from render import RenderContext
-
-from gui import IClickReceiver, IUpdateReceiver, Window, Minimap, IMouseReceiver, DebugGUI
-from game_elements import Planet, PlanetSurfaceCoordinates, Sector, Rock, Spaceship, HarvestedTomato, Plant, LABEL_FRUIT, LABEL_MINIMAP, CLICK_PRIORITY_OTHER
 
 HERE = os.path.dirname(__file__) or "."
 
@@ -85,35 +87,60 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         self.harvested_tomatoes = []
 
         self.tutorial = [
-                (self.resources.sprite('tutorial-incoming.png'), textwrap.dedent("""
+            (
+                self.resources.sprite("tutorial-incoming.png"),
+                textwrap.dedent(
+                    """
                 Cmdr. Gardener, our sensors detect
                 another hostile flyship incoming.
-                """).splitlines()),
-                (self.resources.sprite('tutorial-squash.png'), textwrap.dedent(f"""
+                """
+                ).splitlines(),
+            ),
+            (
+                self.resources.sprite("tutorial-squash.png"),
+                textwrap.dedent(
+                    f"""
                 Fend them off and bring in our
                 harvest before it is too late!
-                """).splitlines()),
-                (self.resources.sprite('tutorial-steal.png'), textwrap.dedent(f"""
+                """
+                ).splitlines(),
+            ),
+            (
+                self.resources.sprite("tutorial-steal.png"),
+                textwrap.dedent(
+                    f"""
                 If the flies steal {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} space
                 tomatoes, we are doomed...
-                """).splitlines()),
-                (self.resources.sprite('tutorial-harvest.png'), textwrap.dedent(f"""
+                """
+                ).splitlines(),
+            ),
+            (
+                self.resources.sprite("tutorial-harvest.png"),
+                textwrap.dedent(
+                    f"""
                 Bring in {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} space tomatoes and we will
                 ketchdown the flies in this quadrant!
-                """).splitlines()),
-                (self.resources.sprite('tutorial-cut.png'), textwrap.dedent("""
+                """
+                ).splitlines(),
+            ),
+            (
+                self.resources.sprite("tutorial-cut.png"),
+                textwrap.dedent(
+                    """
                 Plants grow tomatoes only once.
                 Cut them to let another plant grow.
-                """).splitlines()),
+                """
+                ).splitlines(),
+            ),
         ]
         self.tutorial_pos = 0
         self.tutorial_pageflip_time = 0
 
         self.buttons = [
-                ('Play Game', 'play'),
-                ('Instructions', 'help'),
-                ('Credits', 'credits'),
-                ('Quit', 'quit'),
+            ("Play Game", "play"),
+            ("Instructions", "help"),
+            ("Credits", "credits"),
+            ("Quit", "quit"),
         ]
         self.active_button = None
         self.active_button_time = 0
@@ -155,7 +182,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         elif self.is_gameover_player_wins:
             self.render_gameover_player_wins()
         elif self.is_running:
-            dy = (self.gui.wheel_sum.y - self.gui.wheel_sum.x)
+            dy = self.gui.wheel_sum.y - self.gui.wheel_sum.x
             if dy != 0:
                 self.invalidate_aabb()
             self.rotation_angle_degrees += dy * (30000 / self.planet.get_circumfence())
@@ -188,17 +215,17 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         if (self.is_startup or not self.is_running) and self.active_button is not None:
             label, action = self.active_button
-            if action == 'play':
+            if action == "play":
                 if self.tutorial_pos == len(self.tutorial):
                     self.start_game_or_toggle_pause()
                 else:
                     self.want_tutorial = True
                     self.tutorial_pageflip_time = time.time()
-            elif action == 'help':
+            elif action == "help":
                 self.want_instructions = True
-            elif action == 'credits':
+            elif action == "credits":
                 self.want_credits = True
-            elif action == 'quit':
+            elif action == "quit":
                 self.quit()
 
         for label, color, rect, obj, priority in sorted(
@@ -209,9 +236,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 if isinstance(obj, IClickReceiver):
                     if obj.clicked():
                         logging.debug("click was handled -> breaking out")
-                        if (
-                            label == LABEL_FRUIT
-                        ):
+                        if label == LABEL_FRUIT:
                             self.harvest_on_mouseup = True
                         break
 
@@ -221,12 +246,13 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
     def mouseup(self, position: Vector2):
         if self.harvest_on_mouseup:
             self.harvest_on_mouseup = False
-            target_pos = Vector2(self.minimap.rect.right - 55, self.minimap.rect.bottom + 23)
-            duration = .6
-            self.harvested_tomatoes.append(HarvestedTomato(self,
-                                                           pygame.mouse.get_pos(),
-                                                           target_pos,
-                                                           duration))
+            target_pos = Vector2(
+                self.minimap.rect.right - 55, self.minimap.rect.bottom + 23
+            )
+            duration = 0.6
+            self.harvested_tomatoes.append(
+                HarvestedTomato(self, pygame.mouse.get_pos(), target_pos, duration)
+            )
 
     def mousewheel(self, x: float, y: float, flipped: bool):
         ...
@@ -241,7 +267,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         for harvested in self.harvested_tomatoes:
             harvested.update()
-        self.harvested_tomatoes = [harvested for harvested in self.harvested_tomatoes if not harvested.done]
+        self.harvested_tomatoes = [
+            harvested for harvested in self.harvested_tomatoes if not harvested.done
+        ]
 
         self.spaceship.update()
 
@@ -285,10 +313,11 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         ctx.flush()
 
-    def render_credits(self,ctx):
+    def render_credits(self, ctx):
         self._draw_lines_over(
             ctx,
-            textwrap.dedent("""
+            textwrap.dedent(
+                """
         A PyWeek#34 entry by the Python User Group
         in Vienna, Austria (https://pyug.at/).
 
@@ -300,7 +329,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
         See ARTWORK.txt for a list of third party
         sound and graphic artwork used in this game.
-        """).splitlines(), big=True)
+        """
+            ).splitlines(),
+            big=True,
+        )
 
     def render_tutorial(self, ctx):
         sprite, lines = self.tutorial[self.tutorial_pos]
@@ -313,7 +345,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         offset = 30
         initial_position = ypos + sprite.height + offset / 2
 
-        font_lines = [ctx.font_cache_big.lookup(line or ' ', Color(255, 255, 255)) for line in lines]
+        font_lines = [
+            ctx.font_cache_big.lookup(line or " ", Color(255, 255, 255))
+            for line in lines
+        ]
 
         max_line_width = max(line.width for line in font_lines)
         xpos = (self.width - max_line_width) / 2
@@ -323,14 +358,22 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             ctx.sprite(line, Vector2(xpos, ypos))
             ypos += offset
 
-        tutline = ctx.font_cache.lookup('(click to continue, "s" to skip tutorial)', Color(128, 128, 128))
+        tutline = ctx.font_cache.lookup(
+            '(click to continue, "s" to skip tutorial)', Color(128, 128, 128)
+        )
 
-        ctx.sprite(tutline, Vector2(max(xpos, xpos + max_line_width - tutline.width), ypos + 20))
+        ctx.sprite(
+            tutline,
+            Vector2(max(xpos, xpos + max_line_width - tutline.width), ypos + 20),
+        )
         ctx.flush()
 
         tuta = self.get_tutorial_alpha()
         if tuta < 1:
-            ctx.rect(Color(10, 10, 20, 255 - int(255 * tuta)), Rect(0, 0, self.width, self.height))
+            ctx.rect(
+                Color(10, 10, 20, 255 - int(255 * tuta)),
+                Rect(0, 0, self.width, self.height),
+            )
             ctx.flush()
 
     def render_instructions(self, ctx):
@@ -353,14 +396,18 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             ctx.clear(Color(10, 10, 20))
             self._draw_lines_over(
                 ctx,
-                textwrap.dedent(f"""
+                textwrap.dedent(
+                    f"""
             Oh nooo! It's too late!
             They got all the {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_FLIES_WIN} space tomatoes they need...
             Prepare for evacuation immediately!
 
             But also, thanks for playing our
             little game -- try again, maybe?
-            """).splitlines(), big=True)
+            """
+                ).splitlines(),
+                big=True,
+            )
             ctx.flush()
 
     def render_gameover_player_wins(self):
@@ -368,7 +415,8 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
             ctx.clear(Color(10, 10, 20))
             self._draw_lines_over(
                 ctx,
-                textwrap.dedent(f"""
+                textwrap.dedent(
+                    f"""
             Oh yesss! You did it!
             With these additional {ImportantParameterAffectingGameplay.GAMEOVER_THRESHOLD_PLAYER_WINS} space tomatoes
             we will finally ketchdown the flies.
@@ -376,7 +424,10 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
             And thanks for playing our little
             game, we hope you enjoyed it :)
-            """).splitlines(), big=True)
+            """
+                ).splitlines(),
+                big=True,
+            )
             ctx.flush()
 
     def _draw_lines_over(self, ctx, lines, big=False):
@@ -385,14 +436,16 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
         for i, line in enumerate(lines):
             ctx.text(
                 line,
-                Color(255, 255, 255) if line.startswith("    ") else Color(200, 200, 200),
+                Color(255, 255, 255)
+                if line.startswith("    ")
+                else Color(200, 200, 200),
                 Vector2(330 if big else 220, initial_position + i * offset),
-                big=big
+                big=big,
             )
         ctx.flush()
 
     def get_tutorial_alpha(self):
-        return min(1, max(0, (time.time() - self.tutorial_pageflip_time) / .4))
+        return min(1, max(0, (time.time() - self.tutorial_pageflip_time) / 0.4))
 
     def render_scene(self, *, paused=False, startup=False):
         with self.renderer as ctx:
@@ -492,9 +545,7 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 if isinstance(sprite, dict):
                     sprite = sprite[left_mouse_pressed]
 
-                cursor_position = (
-                    Vector2(mouse_pos) - sprite.size / 2
-                )
+                cursor_position = Vector2(mouse_pos) - sprite.size / 2
                 cursor_center_offset = sprite.size / 2
 
                 ctx.modelview_matrix_stack.push()
@@ -543,11 +594,16 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 
                 ctx.sprite(self.artwork.logo_bg, bg_pos)
 
-                scl = 1 + .1*math.sin(ctx.now*6.4)
+                scl = 1 + 0.1 * math.sin(ctx.now * 6.4)
                 scaling = Vector2(scl, scl)
 
-                fg_pos = Vector2((self.width - self.artwork.logo_bg.width * scl) / 2,
-                                  30 - (scl - 1) * self.artwork.logo_bg.height / 2 - 10 + 3 * math.sin(ctx.now*3.3))
+                fg_pos = Vector2(
+                    (self.width - self.artwork.logo_bg.width * scl) / 2,
+                    30
+                    - (scl - 1) * self.artwork.logo_bg.height / 2
+                    - 10
+                    + 3 * math.sin(ctx.now * 3.3),
+                )
 
                 ctx.sprite(self.artwork.logo_text, fg_pos, scale=scaling)
 
@@ -558,15 +614,26 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                 top_margin = self.artwork.logo_text.height
 
                 x = (self.width - btn_width) / 2
-                y = top_margin + (self.height - top_margin - len(self.buttons) * btn_height - (len(self.buttons) - 1) * spacing) / 2
+                y = (
+                    top_margin
+                    + (
+                        self.height
+                        - top_margin
+                        - len(self.buttons) * btn_height
+                        - (len(self.buttons) - 1) * spacing
+                    )
+                    / 2
+                )
 
                 last_active_button = self.active_button
                 self.active_button = None
                 for label, key in self.buttons:
                     rr = Rect(x, y, btn_width, btn_height)
-                    if rr.collidepoint(pygame.mouse.get_pos()) and (not self.want_instructions and
-                                                                    not self.want_credits and
-                                                                    not self.want_tutorial):
+                    if rr.collidepoint(pygame.mouse.get_pos()) and (
+                        not self.want_instructions
+                        and not self.want_credits
+                        and not self.want_tutorial
+                    ):
                         color = Color(90, 90, 90)
                         self.active_button = (label, key)
                         if self.active_button != last_active_button:
@@ -575,13 +642,30 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
                         color = Color(50, 50, 50)
                     ctx.rect(color, rr, z_layer=ctx.LAYER_BTN_BG)
                     if (label, key) == self.active_button:
-                        alpha = min(1, max(0, (time.time() - self.active_button_time) / .2))
-                        ctx.rect(Color(240, 240, 240), Rect(rr.x + rr.w * (1-alpha) / 2, rr.y, rr.w * alpha, rr.h), z_layer=ctx.LAYER_BTN_BG)
+                        alpha = min(
+                            1, max(0, (time.time() - self.active_button_time) / 0.2)
+                        )
+                        ctx.rect(
+                            Color(240, 240, 240),
+                            Rect(
+                                rr.x + rr.w * (1 - alpha) / 2, rr.y, rr.w * alpha, rr.h
+                            ),
+                            z_layer=ctx.LAYER_BTN_BG,
+                        )
                     else:
                         alpha = 0
-                    rr.topleft += (1-abs(1-2*alpha)) * 10 * Vector2(math.sin(alpha*23), math.cos(alpha*23))
+                    rr.topleft += (
+                        (1 - abs(1 - 2 * alpha))
+                        * 10
+                        * Vector2(math.sin(alpha * 23), math.cos(alpha * 23))
+                    )
                     intens = 255 - int(255 * alpha)
-                    ctx.text_centered_rect(label, Color(intens, intens, intens), rr, z_layer=ctx.LAYER_BTN_TEXT)
+                    ctx.text_centered_rect(
+                        label,
+                        Color(intens, intens, intens),
+                        rr,
+                        z_layer=ctx.LAYER_BTN_TEXT,
+                    )
                     y += btn_height + spacing
 
                 ctx.flush()

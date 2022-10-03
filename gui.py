@@ -1,15 +1,16 @@
 import pygame
+from OpenGL.GL import *
+from pygame import Color, Rect
+from pygame.locals import *
 from pygame.math import Vector2
-from pygame import Rect, Color
-from render import RenderContext
 
 from config import CLIARGS
-from OpenGL.GL import *
-from pygame.locals import *
+from render import RenderContext
 
 LEFT_MOUSE_BUTTON = 1
 MIDDLE_MOUSE_BUTTON = 2
 RIGHT_MOUSE_BUTTON = 3
+
 
 class IClickReceiver:
     def clicked(self):
@@ -40,6 +41,7 @@ class IUpdateReceiver:
 class IDrawable:
     def draw(self, ctx: RenderContext):
         raise NotImplementedError("Draw not implemented")
+
 
 class Widget(IMouseReceiver, IDrawable):
     def __init__(self, w, h):
@@ -140,17 +142,19 @@ class Window:
         self.is_running = not self.is_running
         if self.is_running:
             if self.renderer.paused_started is not None:
-                self.renderer.started += (
-                    time.time() - self.renderer.paused_started
-                )
+                self.renderer.started += time.time() - self.renderer.paused_started
             self.renderer.paused_started = None
-            self.buttons[0] = ('Play Game', 'play')
+            self.buttons[0] = ("Play Game", "play")
         else:
             self.renderer.paused_started = time.time()
-            self.buttons[0] = ('Resume Game', 'play')
+            self.buttons[0] = ("Resume Game", "play")
 
     def process_events(
-            self, *, mouse: IMouseReceiver, update: IUpdateReceiver, gamestate # TODO: type anotation
+        self,
+        *,
+        mouse: IMouseReceiver,
+        update: IUpdateReceiver,
+        gamestate,  # TODO: type anotation
     ):
         for event in pygame.event.get():
             if event.type == QUIT:

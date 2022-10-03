@@ -1,7 +1,7 @@
 import array
 
-from pygame import Vector2, Color
 from OpenGL.GL import *
+from pygame import Color, Vector2
 
 from sprite import ImageSprite
 
