@@ -22,7 +22,7 @@
 # SOFTWARE.
 #
 
-from game import Game
+from red_planted.game import Game
 
 
 def main():

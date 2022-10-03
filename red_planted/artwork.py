@@ -9,8 +9,7 @@ import random
 
 import pygame
 from pygame.mixer import Sound
-
-from sprite import AnimatedImageSprite, ImageSprite
+from .sprite import AnimatedImageSprite, ImageSprite
 
 
 class ResourceManager:

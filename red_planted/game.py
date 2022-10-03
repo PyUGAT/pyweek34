@@ -8,18 +8,17 @@ import textwrap
 import time
 
 import pygame
+from .artwork import Artwork, ResourceManager
+from .config import CLIARGS, ImportantParameterAffectingGameplay
+from .game_elements import (CLICK_PRIORITY_OTHER, LABEL_FRUIT, LABEL_MINIMAP,
+                           HarvestedTomato, Planet, PlanetSurfaceCoordinates,
+                           Plant, Rock, Sector, Spaceship)
+from .gui import (DebugGUI, IClickReceiver, IMouseReceiver, IUpdateReceiver,
+                 Minimap, Window)
 from OpenGL.GL import *
 from pygame.locals import *
 from pygame.math import Vector2
-
-from artwork import Artwork, ResourceManager
-from config import CLIARGS, ImportantParameterAffectingGameplay
-from game_elements import (CLICK_PRIORITY_OTHER, LABEL_FRUIT, LABEL_MINIMAP,
-                           HarvestedTomato, Planet, PlanetSurfaceCoordinates,
-                           Plant, Rock, Sector, Spaceship)
-from gui import (DebugGUI, IClickReceiver, IMouseReceiver, IUpdateReceiver,
-                 Minimap, Window)
-from render import RenderContext
+from .render import RenderContext
 
 HERE = os.path.dirname(__file__) or "."
 

@@ -1,11 +1,10 @@
 import pygame
+from .config import CLIARGS
 from OpenGL.GL import *
 from pygame import Color, Rect
 from pygame.locals import *
 from pygame.math import Vector2
-
-from config import CLIARGS
-from render import RenderContext
+from .render import RenderContext
 
 LEFT_MOUSE_BUTTON = 1
 MIDDLE_MOUSE_BUTTON = 2

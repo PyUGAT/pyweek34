@@ -2,8 +2,7 @@ import array
 
 from OpenGL.GL import *
 from pygame import Color, Vector2
-
-from sprite import ImageSprite
+from .sprite import ImageSprite
 
 
 class IDrawTask:
