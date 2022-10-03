@@ -2,6 +2,7 @@ import array
 
 from OpenGL.GL import *
 from pygame import Color, Vector2
+
 from .sprite import ImageSprite
 
 

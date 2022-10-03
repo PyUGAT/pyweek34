@@ -2,11 +2,12 @@ import logging
 import math
 import random
 
+from pygame import Color, Rect
+from pygame.math import Vector2
+
 from .artwork import Artwork
 from .config import CLIARGS, ImportantParameterAffectingGameplay
 from .gui import IClickReceiver, IDrawable, IUpdateReceiver
-from pygame import Color, Rect
-from pygame.math import Vector2
 from .vectormath import aabb_from_points
 
 (

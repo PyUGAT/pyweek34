@@ -2,9 +2,10 @@ import math
 import time
 
 import pygame
-from .artwork import ResourceManager
 from OpenGL.GL import *
 from pygame import Color, Rect, Vector2
+
+from .artwork import ResourceManager
 from .sprite import ImageSprite
 from .tasks import DrawColoredVerticesTask, DrawSpriteTask
 from .vectormath import Matrix3x3
