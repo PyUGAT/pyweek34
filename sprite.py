@@ -5,6 +5,7 @@ from OpenGL.GL import *
 
 
 class ImageSprite:
+    # TODO: What is a texture?
     def __init__(self, img: pygame.surface.Surface, *, want_mipmap: bool):
         self.img = img
         self.width, self.height = self.img.get_size()
@@ -37,6 +38,7 @@ class AnimatedImageSprite:
 
 
 class Texture:
+    # TODO: What is a texture?
     def __init__(self, sprite: ImageSprite, *, generate_mipmaps: bool):
         self.id = glGenTextures(1)
 
