@@ -24,8 +24,6 @@
 
 from __future__ import annotations
 
-import array
-import ctypes
 import logging
 import math
 import os
@@ -39,11 +37,8 @@ from pygame.locals import *
 from pygame.math import Vector2
 
 from config import CLIARGS, ImportantParameterAffectingGameplay
-from vectormath import Matrix3x3
 from vectormath import aabb_from_points
-from sprite import ImageSprite
 from artwork import Artwork, ResourceManager
-from tasks import DrawSpriteTask, DrawColoredVerticesTask
 from render import RenderContext
 
 HERE = os.path.dirname(__file__) or "."
@@ -75,6 +70,7 @@ logging.basicConfig(
 
 class IClickReceiver:
     def clicked(self):
+        # TODO: What's the purpose of this method?
         # Return true to prevent propagation of event
         return False
 
