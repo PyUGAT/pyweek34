@@ -2578,6 +2578,9 @@ class Game(Window, IUpdateReceiver, IMouseReceiver):
 def main():
     # test_matrix3x3()
 
+    # https://github.com/pygame/pygame/issues/3110
+    os.environ["SDL_VIDEO_X11_FORCE_EGL"] = "1"
+
     game = Game()
 
     while True:
